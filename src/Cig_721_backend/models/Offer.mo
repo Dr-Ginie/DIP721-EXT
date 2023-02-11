@@ -3,10 +3,17 @@ import Time "mo:base/Time";
 module {
 
     public type Offer = {
-        id:Nat32;
-        metaDataId:Nat32;
+        offerId:Nat32;
+        mintId:Nat32;
         seller:Principal;
         buyer:Principal;
+        amount:Nat;
+        token:Token;
+        expiration:?Time.Time;
+    };
+
+    public type OfferRequest = {
+        mintId:Nat32;
         amount:Nat;
         token:Token;
         expiration:?Time.Time;
