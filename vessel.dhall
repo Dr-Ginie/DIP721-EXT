@@ -1,0 +1,1 @@
+{ dependencies = [ "base","json", "stable" ], compiler = Some "0.7.6" }
