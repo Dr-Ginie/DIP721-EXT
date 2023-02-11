@@ -94,7 +94,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     let metaData : Metadata = {
       id = currentId;
       owner = owner;
-      data = jsonString;
+      data = Text.encodeUtf8(jsonString);
     };
     _mint(metaData);
     currentId;
