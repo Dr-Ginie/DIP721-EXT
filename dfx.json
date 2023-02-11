@@ -1,0 +1,28 @@
+{
+  "canisters": {
+    "Cig_721_backend": {
+      "main": "src/Cig_721_backend/main.mo",
+      "type": "motoko"
+    },
+    "Cig_721_frontend": {
+      "dependencies": [
+        "Cig_721_backend"
+      ],
+      "frontend": {
+        "entrypoint": "src/Cig_721_frontend/src/index.html"
+      },
+      "source": [
+        "src/Cig_721_frontend/assets",
+        "dist/Cig_721_frontend/"
+      ],
+      "type": "assets"
+    }
+  },
+  "defaults": {
+    "build": {
+      "args": "",
+      "packtool": ""
+    }
+  },
+  "version": 1
+}
