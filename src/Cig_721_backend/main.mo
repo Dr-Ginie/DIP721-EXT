@@ -671,13 +671,13 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
-  private func _tokenTransfer(offer : Offer) : async () {
+  private func _tokenTransfer(offer : Offer, to:Principal) : async () {
     assert (offer.amount > 0);
     let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
     switch (offer.token) {
       case (#Cig20(value)) {
         let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Cig20.service(value).transfer(offer.buyer, _amount);
+        let result = await Cig20.service(value).transfer(to, _amount);
         let royaltyResult = await Cig20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
@@ -690,7 +690,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
       };
       case (#Dip20(value)) {
         let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Dip20.service(value).transfer(offer.buyer, _amount);
+        let result = await Dip20.service(value).transfer(to, _amount);
         let royaltyResult = await Dip20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
