@@ -302,8 +302,8 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     sales := HashMap.insert(sales, offerRequest.mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
-  public shared ({ caller }) func bid(bidRequest : Offer) : async () {
-    await _bid(bidRequest, caller);
+  public shared ({ caller }) func bid(amount:Nat, _mintId:Nat32) : async () {
+    await _bid(amount, _mintId, caller);
   };
 
   public shared ({ caller }) func auction(auctonRequest : AuctionRequest) : async () {
@@ -316,14 +316,14 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
       case (null) {
         await _remove(auctonRequest.mintId);
         let _auction = {
-          end = Time.now() + auctonRequest.duration;
+          end = Time.now() + (auctonRequest.duration * 1000_000_000);
           mintId = auctonRequest.mintId;
           amount = auctonRequest.amount;
           token = auctonRequest.token;
         };
         auctions := HashMap.insert(auctions, auctonRequest.mintId, n32Hash, n32Equal, _auction).0;
         ignore setTimer(
-          #nanoseconds(auctonRequest.duration),
+          #seconds(auctonRequest.duration),
           func() : async () {
             await _endAuction(auctonRequest.mintId);
           },
@@ -476,54 +476,54 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
-  private func _bid(bidRequest : Offer, buyer : Principal) : async () {
-    let exist = HashMap.get(bids, bidRequest.mintId, n32Hash, n32Equal);
-    let _auction = HashMap.get(auctions, bidRequest.mintId, n32Hash, n32Equal);
-    let _winningBid = HashMap.get(winningBids, bidRequest.mintId, n32Hash, n32Equal);
-    let _owner = _getOwner(bidRequest.mintId);
+  private func _bid(amount:Nat, _mintId:Nat32, buyer : Principal) : async () {
+    let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
+    let _auction = HashMap.get(auctions, _mintId, n32Hash, n32Equal);
+    let _winningBid = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
+    let _owner = _getOwner(_mintId);
     switch (_auction) {
       case (?_auction) {
-        let offer = {
-          offerId = bidRequest.offerId;
-          mintId = _auction.mintId;
+        let offer:Offer = {
+          offerId = 0;
+          mintId = _mintId;
           seller = _owner;
           buyer = buyer;
-          amount = bidRequest.amount;
+          amount = amount;
           token = _auction.token;
-          expiration = bidRequest.expiration;
+          expiration = null;
         };
         switch (_winningBid) {
           case (?_winningBid) {
             if (offer.amount > _winningBid.amount) {
               await _tokenTransferFrom(offer);
               await _tokenTransfer(_winningBid,_winningBid.buyer);
-              winningBids := HashMap.insert(winningBids, bidRequest.mintId, n32Hash, n32Equal, bidRequest).0;
+              winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, offer).0;
               switch (exist) {
                 case (?exist) {
-                  let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-                  bids := HashMap.insert(bids, bidRequest.mintId, n32Hash, n32Equal, tempMap).0;
+                  let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, offer).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
                 };
                 case (null) {
                   var tempMap = HashMap.empty<Principal, Offer>();
-                  tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-                  bids := HashMap.insert(bids, bidRequest.mintId, n32Hash, n32Equal, tempMap).0;
+                  tempMap := HashMap.insert(tempMap, buyer, pHash, pEqual, offer).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
                 };
               };
             };
           };
           case (null) {
-            if (offer.amount > _auction.amount) {
+            if (offer.amount >= _auction.amount) {
               await _tokenTransferFrom(offer);
-              winningBids := HashMap.insert(winningBids, bidRequest.mintId, n32Hash, n32Equal, bidRequest).0;
+              winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, offer).0;
               switch (exist) {
                 case (?exist) {
-                  let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-                  bids := HashMap.insert(bids, bidRequest.mintId, n32Hash, n32Equal, tempMap).0;
+                  let tempMap = HashMap.insert(exist, buyer, pHash, pEqual, offer).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
                 };
                 case (null) {
                   var tempMap = HashMap.empty<Principal, Offer>();
-                  tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-                  bids := HashMap.insert(bids, bidRequest.mintId, n32Hash, n32Equal, tempMap).0;
+                  tempMap := HashMap.insert(tempMap, buyer, pHash, pEqual, offer).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
                 };
               };
             };
@@ -531,7 +531,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
         };
       };
       case (null) {
-
+        throw (Error.reject("No Auction for mintId " #Nat32.toText(_mintId)));
       };
     };
   };
