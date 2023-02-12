@@ -218,65 +218,24 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     await _bid(_mintId, bidRequest);
   };
 
-  private func _bid(_mintId : Nat32, bidRequest : Offer): async () {
-    let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
-    let _winningBid = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
-    let _owner = _getOwner(_mintId);
-    await _tokenTransferFrom(bidRequest);
-    switch (_winningBid) {
-      case (?_winningBid) {
-        if (bidRequest.amount > _winningBid.amount) {
-          winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
-          switch (exist) {
-            case (?exist) {
-              let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
-            };
-            case (null) {
-              var tempMap = HashMap.empty<Principal, Offer>();
-              tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
-            };
-          };
-        };
-      };
-      case (null) {
-        winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
-        switch (exist) {
-          case (?exist) {
-            let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
-          };
-          case (null) {
-            var tempMap = HashMap.empty<Principal, Offer>();
-            tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
-          };
-        };
-      };
+  public shared ({ caller }) func auction(offerRequest : OfferRequest, duration : Nat) : async () {
+    assert (_isOwner(caller, offerRequest.mintId));
+    let offer:Offer = {
+      offerId = 0;
+      mintId = offerRequest.mintId;
+      seller = caller;
+      buyer = caller;
+      amount = offerRequest.amount;
+      token = offerRequest.token;
+      expiration = null;
     };
-  };
-
-  public shared ({ caller }) func list(_mintId : Nat32, duration : Nat) : async () {
-    assert (_isOwner(caller, _mintId));
+    winningBids := HashMap.insert(winningBids, offerRequest.mintId, n32Hash, n32Equal, offer).0;
     ignore setTimer(
       #seconds(duration),
       func() : async () {
-        await _endBid(_mintId);
+        await _endAuction(offerRequest.mintId);
       },
     );
-  };
-
-  private func _endBid(_mintId : Nat32) : async () {
-    let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
-    switch (exist) {
-      case (?exist) {
-       await _acceptOffer(exist)
-      };
-      case (null) {
-
-      };
-    };
   };
 
   public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
@@ -404,6 +363,59 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
+  private func _endAuction(_mintId : Nat32) : async () {
+    let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        if (exist.buyer != exist.seller) {
+          await _acceptOffer(exist);
+        };
+      };
+      case (null) {
+
+      };
+    };
+  };
+
+  private func _bid(_mintId : Nat32, bidRequest : Offer) : async () {
+    let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
+    let _winningBid = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
+    let _owner = _getOwner(_mintId);
+    await _tokenTransferFrom(bidRequest);
+    switch (_winningBid) {
+      case (?_winningBid) {
+        if (bidRequest.amount > _winningBid.amount) {
+          winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
+          switch (exist) {
+            case (?exist) {
+              let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+            };
+            case (null) {
+              var tempMap = HashMap.empty<Principal, Offer>();
+              tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+            };
+          };
+        };
+      };
+      case (null) {
+        winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
+        switch (exist) {
+          case (?exist) {
+            let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+          };
+          case (null) {
+            var tempMap = HashMap.empty<Principal, Offer>();
+            tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+          };
+        };
+      };
+    };
+  };
+
   private func _transfer(from : Principal, to : Principal, _mintId : Nat32) : async* () {
     let exist = HashMap.get(holders, from, pHash, pEqual);
     let exist2 = HashMap.get(holders, to, pHash, pEqual);
@@ -449,7 +461,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   };
 
-  private func _removeOffers(_mintId:Nat32) {
+  private func _removeOffers(_mintId : Nat32) {
     offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
     approved := HashMap.remove(approved, _mintId, n32Hash, n32Equal).0;
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
@@ -644,7 +656,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         let now = Time.now();
 
         let from = { owner = offer.buyer; subaccount = null };
-        let to = { owner =Principal.fromActor(this); subaccount = null };
+        let to = { owner = Principal.fromActor(this); subaccount = null };
         let toRoyalties = { owner = collectionCreator; subaccount = null };
 
         let args : ICRC2.TransferArgs = {
