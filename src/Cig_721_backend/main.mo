@@ -108,10 +108,9 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     mintId := mintId + 1;
     let data : Metadata = {
       mintId = currentId;
-      owner = owner;
       data = Text.encodeUtf8(jsonString);
     };
-    _mint(data);
+    _mint(data, owner);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
     currentId;
   };
@@ -123,30 +122,23 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
     let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
-    let _owner = HashMap.get(manifest, _mintId, n32Hash, n32Equal);
+    let _owner = await* _getOwner(_mintId);
     switch (offerRequest) {
       case (?offerRequest) {
-        switch (_owner) {
-          case (?_owner) {
-            let currentId = offerId;
-            offerId := offerId + 1;
-            let offer = {
-              offerId = currentId;
-              mintId = offerRequest.mintId;
-              seller = _owner;
-              buyer = caller;
-              amount = offerRequest.amount;
-              token = offerRequest.token;
-              expiration = offerRequest.expiration;
-            };
-            await _acceptOffer(offer);
-            let _ = HashMap.remove(sales, _mintId, n32Hash, n32Equal);
-            currentId;
-          };
-          case (null) {
-            throw (Error.reject("No Data for Owner"));
-          };
+        let currentId = offerId;
+        offerId := offerId + 1;
+        let offer = {
+          offerId = currentId;
+          mintId = offerRequest.mintId;
+          seller = _owner;
+          buyer = caller;
+          amount = offerRequest.amount;
+          token = offerRequest.token;
+          expiration = offerRequest.expiration;
         };
+        await _acceptOffer(offer);
+        let _ = HashMap.remove(sales, _mintId, n32Hash, n32Equal);
+        currentId;
       };
       case (null) {
         throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
@@ -173,6 +165,18 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     _offerId;
   };
 
+  private func _getOwner(_mintId : Nat32) : async* Principal {
+    let _owner = HashMap.get(manifest, _mintId, n32Hash, n32Equal);
+    switch (_owner) {
+      case (?_owner) {
+        _owner;
+      };
+      case (null) {
+        throw (Error.reject("No Data for Owner"));
+      };
+    };
+  };
+
   private func _getOffers(_mintId : Nat32) : async* [Offer] {
     let exist = HashMap.get(offers, _mintId, n32Hash, n32Equal);
     switch (exist) {
@@ -185,26 +189,26 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
-  private func _mint(data : Metadata) {
+  private func _mint(data : Metadata, _owner : Principal) {
     metaData := HashMap.insert(metaData, data.mintId, n32Hash, n32Equal, data).0;
-    let owner = data.owner;
-    let exist = HashMap.get(holders, owner, pHash, pEqual);
+    let exist = HashMap.get(holders, _owner, pHash, pEqual);
 
     switch (exist) {
       case (?exist) {
         let tempMap = HashMap.insert(exist, data.mintId, n32Hash, n32Equal, data).0;
-        holders := HashMap.insert(holders, owner, pHash, pEqual, tempMap).0;
+        holders := HashMap.insert(holders, _owner, pHash, pEqual, tempMap).0;
       };
       case (null) {
         var tempMap = HashMap.empty<Nat32, Metadata>();
         tempMap := HashMap.insert(tempMap, data.mintId, n32Hash, n32Equal, data).0;
-        holders := HashMap.insert(holders, owner, pHash, pEqual, tempMap).0;
+        holders := HashMap.insert(holders, _owner, pHash, pEqual, tempMap).0;
       };
     };
   };
 
   private func _makeOffer(offerRequest : OfferRequest, caller : Principal) : async* Nat32 {
     let exist = HashMap.get(metaData, offerRequest.mintId, n32Hash, n32Equal);
+    let _owner = await* _getOwner(offerRequest.mintId);
     switch (exist) {
       case (?exist) {
         let currentId = offerId;
@@ -212,7 +216,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         let offer = {
           offerId = currentId;
           mintId = offerRequest.mintId;
-          seller = exist.owner;
+          seller = _owner;
           buyer = caller;
           amount = offerRequest.amount;
           token = offerRequest.token;
