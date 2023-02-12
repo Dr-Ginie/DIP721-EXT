@@ -489,7 +489,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
           case (?_winningBid) {
             if (offer.amount > _winningBid.amount) {
               await _tokenTransferFrom(offer);
-              await _tokenTransfer(_winningBid);
+              await _tokenTransfer(_winningBid,_winningBid.buyer);
               winningBids := HashMap.insert(winningBids, bidRequest.mintId, n32Hash, n32Equal, bidRequest).0;
               switch (exist) {
                 case (?exist) {
@@ -579,7 +579,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
     switch(exist){
       case(?exist){
-        await _tokenTransfer(exist)
+        await _tokenTransfer(exist,exist.buyer)
       };
       case(null){
 
@@ -596,7 +596,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private func _acceptOffer(offer : Offer) : async () {
     //let _allowance = await _tokenAllowance(offer);
     //assert (_allowance >= offer.amount);
-    await _tokenTransfer(offer);
+    await _tokenTransfer(offer,offer.seller);
     await* _transfer(offer.buyer, offer.mintId)
 
   };
