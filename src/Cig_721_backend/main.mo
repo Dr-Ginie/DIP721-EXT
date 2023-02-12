@@ -3,8 +3,6 @@ import HashMap "mo:stable/HashMap";
 import Debug "mo:base/Debug";
 import Buffer "mo:base/Buffer";
 import List "mo:base/List";
-import SHA256 "mo:crypto/SHA/SHA256";
-import Hex "mo:encoding/Hex";
 import Blob "mo:base/Blob";
 import Text "mo:base/Text";
 import Float "mo:base/Float";
@@ -29,6 +27,7 @@ import ICRC2 "./services/ICRC2";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
 import Token "./models/Token";
+import Auction "./models/Auction";
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
 actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Text) = this {
@@ -39,6 +38,8 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private type Bid = Bid.Bid;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Token.Token;
+  private type Auction = Auction.Auction;
+  private type AuctionRequest = Auction.AuctionRequest;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -64,6 +65,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
   private stable var sales = HashMap.empty<Nat32, OfferRequest>();
   private stable var approved = HashMap.empty<Nat32, Principal>();
+  private stable var auctions = HashMap.empty<Nat32, Auction>();
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
 
@@ -116,6 +118,14 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
+  public query func fetchAuctions() : async [Auction] {
+    var _auctions = Buffer.Buffer<Auction>(0);
+    for ((id, _auction) in HashMap.entries(auctions)) {
+      _auctions.add(_auction);
+    };
+    Buffer.toArray(_auctions);
+  };
+
   public query func fetchBids(_mintId : Nat32) : async [Bid] {
     let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
     var _bids = Buffer.Buffer<Bid>(0);
@@ -132,7 +142,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     Buffer.toArray(_bids);
   };
 
-  public query func fetchsales(_mintId : Nat32) : async [OfferRequest] {
+  public query func fetchSales() : async [OfferRequest] {
     var _bids = Buffer.Buffer<OfferRequest>(0);
     for ((id, _offer) in HashMap.entries(sales)) {
       _bids.add(_offer);
@@ -195,6 +205,19 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   //Call close mint to set the Owner to this canister and prevent additioanl minting
   public shared ({ caller }) func closeMint() : async () {
     collectionOwner := Principal.fromActor(this);
+  };
+
+  public shared ({ caller }) func testMint() : async Nat32 {
+    assert (caller == collectionOwner);
+    let currentId = mintId;
+    mintId := mintId + 1;
+    let _metadata : Metadata = {
+      mintId = currentId;
+      data = Text.encodeUtf8("boomStick");
+    };
+    _mint(_metadata, Principal.fromText("j26ec-ix7zw-kiwcx-ixw6w-72irq-zsbyr-4t7fk-alils-u33an-kh6rk-7qe"));
+    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+    currentId;
   };
 
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
@@ -266,33 +289,38 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
-  public shared ({ caller }) func sell(_mintId : Nat32, offerRequest : OfferRequest) : async () {
-    assert (_isOwner(caller, _mintId));
-    sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
+  public shared ({ caller }) func sell(offerRequest : OfferRequest) : async () {
+    assert (_isOwner(caller, offerRequest.mintId));
+    sales := HashMap.insert(sales, offerRequest.mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
   public shared ({ caller }) func bid(_mintId : Nat32, bidRequest : Offer) : async () {
-    await _bid(_mintId, bidRequest);
+    await _bid(_mintId, bidRequest, caller);
   };
 
-  public shared ({ caller }) func auction(offerRequest : OfferRequest, duration : Nat) : async () {
-    assert (_isOwner(caller, offerRequest.mintId));
-    let offer : Offer = {
-      offerId = 0;
-      mintId = offerRequest.mintId;
-      seller = caller;
-      buyer = caller;
-      amount = offerRequest.amount;
-      token = offerRequest.token;
-      expiration = null;
+  public shared ({ caller }) func auction(auctonRequest : AuctionRequest,) : async () {
+    assert (_isOwner(caller, auctonRequest.mintId));
+    let exist = HashMap.get(auctions, auctonRequest.mintId, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+
+      };
+      case (null) {
+        let _auction = {
+          end = Time.now() + auctonRequest.duration;
+          mintId = auctonRequest.mintId;
+          amount = auctonRequest.amount;
+          token = auctonRequest.token;
+        };
+        auctions := HashMap.insert(auctions, auctonRequest.mintId, n32Hash, n32Equal, _auction).0;
+        ignore setTimer(
+          #nanoseconds(auctonRequest.duration),
+          func() : async () {
+            await _endAuction(auctonRequest.mintId);
+          },
+        );
+      };
     };
-    winningBids := HashMap.insert(winningBids, offerRequest.mintId, n32Hash, n32Equal, offer).0;
-    ignore setTimer(
-      #seconds(duration),
-      func() : async () {
-        await _endAuction(offerRequest.mintId);
-      },
-    );
   };
 
   public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
@@ -314,7 +342,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
           expiration = offerRequest.expiration;
         };
         try {
-          await _acceptOffer(offer);
+          await _buy(offer);
         } catch (e) {
           assert (false);
         };
@@ -424,9 +452,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
-        if (exist.buyer != exist.seller) {
-          await _acceptOffer(exist);
-        };
+        await _acceptOffer(exist);
       };
       case (null) {
 
@@ -434,41 +460,62 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
-  private func _bid(_mintId : Nat32, bidRequest : Offer) : async () {
+  private func _bid(_mintId : Nat32, bidRequest : Offer, buyer : Principal) : async () {
     let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
+    let _auction = HashMap.get(auctions, _mintId, n32Hash, n32Equal);
     let _winningBid = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
     let _owner = _getOwner(_mintId);
-    await _tokenTransferFrom(bidRequest);
-    switch (_winningBid) {
-      case (?_winningBid) {
-        if (bidRequest.amount > _winningBid.amount) {
-          winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
-          switch (exist) {
-            case (?exist) {
-              let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+    switch (_auction) {
+      case (?_auction) {
+        let offer = {
+          offerId = bidRequest.offerId;
+          mintId = _auction.mintId;
+          seller = _owner;
+          buyer = buyer;
+          amount = bidRequest.amount;
+          token = _auction.token;
+          expiration = bidRequest.expiration;
+        };
+        switch (_winningBid) {
+          case (?_winningBid) {
+            if (offer.amount > _winningBid.amount) {
+              await _tokenTransferFrom(offer);
+              await _tokenTransfer(_winningBid);
+              winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
+              switch (exist) {
+                case (?exist) {
+                  let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+                };
+                case (null) {
+                  var tempMap = HashMap.empty<Principal, Offer>();
+                  tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+                };
+              };
             };
-            case (null) {
-              var tempMap = HashMap.empty<Principal, Offer>();
-              tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+          };
+          case (null) {
+            if (offer.amount > _auction.amount) {
+              await _tokenTransferFrom(offer);
+              winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
+              switch (exist) {
+                case (?exist) {
+                  let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+                };
+                case (null) {
+                  var tempMap = HashMap.empty<Principal, Offer>();
+                  tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+                  bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+                };
+              };
             };
           };
         };
       };
       case (null) {
-        winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
-        switch (exist) {
-          case (?exist) {
-            let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
-          };
-          case (null) {
-            var tempMap = HashMap.empty<Principal, Offer>();
-            tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
-          };
-        };
+
       };
     };
   };
@@ -525,14 +572,22 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
     bids := HashMap.remove(bids, _mintId, n32Hash, n32Equal).0;
     winningBids := HashMap.remove(winningBids, _mintId, n32Hash, n32Equal).0;
+    auctions := HashMap.remove(auctions, _mintId, n32Hash, n32Equal).0;
   };
 
   private func _acceptOffer(offer : Offer) : async () {
-    let _allowance = await _tokenAllowance(offer);
-    assert (_allowance >= offer.amount);
+    //let _allowance = await _tokenAllowance(offer);
+    //assert (_allowance >= offer.amount);
     await _tokenTransfer(offer);
     await* _transfer(offer.buyer, offer.mintId)
 
+  };
+
+  private func _buy(offer : Offer) : async () {
+    let _allowance = await _tokenAllowance(offer);
+    assert (_allowance >= offer.amount);
+    await _tokenTransferFromRoyalties(offer);
+    await* _transfer(offer.buyer, offer.mintId);
   };
 
   private func _winningBid(_mintId : Nat32) : async* Offer {
@@ -550,10 +605,10 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private func _tokenAllowance(offer : Offer) : async Nat {
     switch (offer.token) {
       case (#Cig20(value)) {
-        await Cig20.service(value).allowance(offer.seller, offer.buyer);
+        await Cig20.service(value).allowance(offer.buyer, Principal.fromActor(this));
       };
       case (#Dip20(value)) {
-        await Dip20.service(value).allowance(offer.seller, offer.buyer);
+        await Dip20.service(value).allowance(offer.buyer, Principal.fromActor(this));
       };
       case (#IRC2(value)) {
         let now = Time.now();
@@ -608,9 +663,9 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
   private func _tokenTransfer(offer : Offer) : async () {
     assert (offer.amount > 0);
+    let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
     switch (offer.token) {
       case (#Cig20(value)) {
-        let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
         let result = await Cig20.service(value).transfer(offer.buyer, _amount);
         let royaltyResult = await Cig20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
@@ -624,7 +679,6 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
         };
       };
       case (#Dip20(value)) {
-        let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
         let result = await Dip20.service(value).transfer(offer.buyer, _amount);
         let royaltyResult = await Dip20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
@@ -638,7 +692,6 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
         };
       };
       case (#IRC2(value)) {
-        let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
         let now = Time.now();
 
@@ -728,6 +781,81 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
         };
 
         let result = await ICRC2.service(value).icrc2_transfer_from(args);
+        switch (result) {
+          case (#Ok(value)) {
+
+          };
+          case (#Err(value)) {
+            throw (Error.reject("Token Transfer Error"));
+          };
+        };
+
+      };
+      case (#EXT(value)) {
+        throw (Error.reject("No Implmentation"));
+      };
+    };
+  };
+
+  private func _tokenTransferFromRoyalties(offer : Offer) : async () {
+    assert (offer.amount > 0);
+    let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
+    switch (offer.token) {
+      case (#Cig20(value)) {
+        let _amount = offer.amount - Utils.floatToNat(royalties);
+        let result = await Cig20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
+        let royaltyResult = await Cig20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
+        switch (result) {
+          case (#Ok(value)) {
+
+          };
+          case (#Err(value)) {
+            throw (Error.reject("Token Transfer Error"));
+          };
+        };
+      };
+      case (#Dip20(value)) {
+        let _amount = offer.amount - Utils.floatToNat(royalties);
+        let result = await Dip20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
+        let royaltyResult = await Dip20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
+        switch (result) {
+          case (#Ok(value)) {
+
+          };
+          case (#Err(value)) {
+            throw (Error.reject("Token Transfer Error"));
+          };
+        };
+      };
+      case (#IRC2(value)) {
+        let now = Time.now();
+
+        let from = { owner = offer.buyer; subaccount = null };
+        let to = { owner = Principal.fromActor(this); subaccount = null };
+        let toRoyalties = { owner = collectionCreator; subaccount = null };
+
+        let args : ICRC2.TransferArgs = {
+          from = from;
+          to = to;
+          amount = offer.amount;
+          fee = 0;
+          memo = Text.encodeUtf8("");
+          created_at_time = 0;
+
+        };
+
+        let argsRoyalties : ICRC2.TransferArgs = {
+          from = from;
+          to = toRoyalties;
+          amount = Utils.floatToNat(royalties);
+          fee = 0;
+          memo = Text.encodeUtf8("");
+          created_at_time = 0;
+
+        };
+
+        let result = await ICRC2.service(value).icrc2_transfer_from(args);
+        let royaltyResult = await ICRC2.service(value).icrc2_transfer_from(argsRoyalties);
         switch (result) {
           case (#Ok(value)) {
 

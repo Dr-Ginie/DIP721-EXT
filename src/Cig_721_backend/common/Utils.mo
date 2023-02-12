@@ -18,8 +18,6 @@ import Blob "mo:base/Blob";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 import Nat8 "mo:base/Nat8";
-import Hex "mo:encoding/Hex";
-import SHA256 "mo:crypto/SHA/SHA256";
 
 module {
     public func natToFloat(value : Nat) : Float {
