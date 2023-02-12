@@ -27,6 +27,8 @@ import Cig20 "./services/Cig20";
 import ICRC2 "./services/ICRC2";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
+import Token "./models/Token";
+import Bid "models/Bid";
 
 actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
@@ -34,7 +36,8 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private type MintRequest = MintRequest.MintRequest;
   private type Offer = Offer.Offer;
   private type OfferRequest = Offer.OfferRequest;
-  private type Token = Offer.Token;
+  private type Token = Token.Token;
+  private type Bid = Bid.Bid;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -59,6 +62,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
   private stable var sales = HashMap.empty<Nat32, OfferRequest>();
   private stable var approved = HashMap.empty<Nat32, Principal>();
+  private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Bid>>();
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -129,7 +133,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   ///Update Methods
 
   //Call close mint to set the Owner to this canister and prevent additioanl minting
-  public shared ({caller}) func closeMint(): async () {
+  public shared ({ caller }) func closeMint() : async () {
     collectionOwner := Principal.fromActor(this);
   };
 
@@ -163,43 +167,44 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     result;
   };
 
-  public shared ({caller}) func transfer(to : Principal, _mintId : Nat32): async () {
-    assert(_isOwner(caller, _mintId));
+  public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
+    assert (_isOwner(caller, _mintId));
     await* _transfer(caller, to, _mintId);
   };
 
-  public shared ({caller}) func transferFrom(from : Principal, to : Principal, _mintId : Nat32): async () {
-    assert(_isOwner(from, _mintId));
+  public shared ({ caller }) func transferFrom(from : Principal, to : Principal, _mintId : Nat32) : async () {
+    assert (_isOwner(from, _mintId));
     let exist = HashMap.get(approved, _mintId, n32Hash, n32Equal);
-    switch(exist){
-      case(?exist){
-        if (exist == caller){
+    switch (exist) {
+      case (?exist) {
+        if (exist == caller) {
           await* _transfer(from, to, _mintId);
         };
       };
-      case(null){
+      case (null) {
         throw (Error.reject("Unauthorized " #Nat32.toText(_mintId)));
-      }
+      };
     };
   };
 
-  public shared ({caller}) func approve(to : Principal, _mintId : Nat32): async () {
-    assert(_isOwner(caller, _mintId));
+  public shared ({ caller }) func approve(to : Principal, _mintId : Nat32) : async () {
+    assert (_isOwner(caller, _mintId));
     approved := HashMap.insert(approved, _mintId, n32Hash, n32Equal, to).0;
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
     offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
+    bids := HashMap.remove(bids, _mintId, n32Hash, n32Equal).0;
   };
 
-  public shared ({caller}) func allowance(_owner : Principal, _mintId : Nat32): async Bool {
-    assert(_isOwner(_owner, _mintId));
+  public shared ({ caller }) func allowance(_owner : Principal, _mintId : Nat32) : async Bool {
+    assert (_isOwner(_owner, _mintId));
     let exist = HashMap.get(approved, _mintId, n32Hash, n32Equal);
-    switch(exist){
-      case(?exist){
-        exist == caller
+    switch (exist) {
+      case (?exist) {
+        exist == caller;
       };
-      case(null){
-        false
-      }
+      case (null) {
+        false;
+      };
     };
   };
 
@@ -208,14 +213,22 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
-  private func _isExpired(time:?Time.Time): Bool {
-    let now = Time.now();
-    switch(time){
-      case(?time){
-        time < now
+  public shared ({ caller }) func bid(_mintId : Nat32, bidRequest : Bid) : async () {
+    _bid(_mintId, bidRequest);
+  };
+
+  private func _bid(_mintId : Nat32, bidRequest : Bid) {
+    let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
+    let _owner = _getOwner(_mintId);
+    switch (exist) {
+      case (?exist) {
+        let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+        bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
       };
-      case(null){
-        false
+      case (null) {
+        var tempMap = HashMap.empty<Principal, Bid>();
+        tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+        bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
       };
     };
   };
@@ -226,7 +239,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     switch (offerRequest) {
       case (?offerRequest) {
         let isExpired = _isExpired(offerRequest.expiration);
-        assert(isExpired == false);
+        assert (isExpired == false);
         let currentId = offerId;
         offerId := offerId + 1;
         let offer = {
@@ -239,7 +252,6 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
           expiration = offerRequest.expiration;
         };
         await _acceptOffer(offer);
-        sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
         currentId;
       };
       case (null) {
@@ -258,9 +270,8 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     switch (offer) {
       case (?offer) {
         let isExpired = _isExpired(offer.expiration);
-        assert(isExpired == false);
+        assert (isExpired == false);
         await _acceptOffer(offer);
-        offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
       };
       case (null) {
         throw (Error.reject("No Data for OfferId " #Nat32.toText(_offerId)));
@@ -383,6 +394,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
     approved := HashMap.remove(approved, _mintId, n32Hash, n32Equal).0;
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
+    bids := HashMap.remove(bids, _mintId, n32Hash, n32Equal).0;
     manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
 
   };
@@ -442,11 +454,23 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
+  private func _isExpired(time : ?Time.Time) : Bool {
+    let now = Time.now();
+    switch (time) {
+      case (?time) {
+        time < now;
+      };
+      case (null) {
+        false;
+      };
+    };
+  };
+
   private func _tokenTransferFrom(offer : Offer) : async () {
-    assert(offer.amount > 0);
+    assert (offer.amount > 0);
     switch (offer.token) {
       case (#Cig20(value)) {
-        let royalties = Float.mul(Utils.natToFloat(offer.amount),royalty);
+        let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
         let result = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, _amount);
         let royaltyResult = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, Utils.floatToNat(royalties));
@@ -460,7 +484,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         };
       };
       case (#Dip20(value)) {
-        let royalties = Float.mul(Utils.natToFloat(offer.amount),royalty);
+        let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
         let result = await Dip20.service(value).transferFrom(offer.seller, offer.buyer, _amount);
         let royaltyResult = await Dip20.service(value).transferFrom(offer.seller, collectionCreator, Utils.floatToNat(royalties));
@@ -474,7 +498,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         };
       };
       case (#IRC2(value)) {
-        let royalties = Float.mul(Utils.natToFloat(offer.amount),royalty);
+        let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
         let now = Time.now();
 

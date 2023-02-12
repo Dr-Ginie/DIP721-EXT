@@ -1,6 +1,8 @@
 import Time "mo:base/Time";
-
+import Token "./Token";
 module {
+
+    private type Token = Token.Token;
 
     public type Offer = {
         offerId:Nat32;
@@ -17,12 +19,5 @@ module {
         amount:Nat;
         token:Token;
         expiration:?Time.Time;
-    };
-
-    public type Token = {
-        #Cig20:Text;
-        #Dip20:Text;
-        #IRC2:Text;
-        #EXT:Text;
     };
 }
