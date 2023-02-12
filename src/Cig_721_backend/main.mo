@@ -49,7 +49,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var offerId : Nat32 = 1;
   private stable var holders = HashMap.empty<Principal, HashMap.HashMap<Nat32, Metadata>>();
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
-  private stable var offers = HashMap.empty<Nat32, Offer>();
+  private stable var offers = HashMap.empty<Nat32, [Offer]>();
 
   public query func getMemorySize() : async Nat {
     let size = Prim.rts_memory_size();
@@ -117,6 +117,33 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     await* _makeOffer(offerRequest, caller);
   };
 
+  public shared ({ caller }) func acceptOffer(_mintId : Nat32, _offerId : Nat32) : async Nat32 {
+    let _offers = await* _getOffers(_mintId);
+    let offer = Array.find<Offer>(_offers, func(e : Offer) : Bool { e.offerId == _offerId });
+    switch (offer) {
+      case (?offer) {
+        await _acceptOffer(offer);
+        let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
+      };
+      case (null) {
+        throw (Error.reject("No Data for OfferId " #Nat32.toText(_offerId)));
+      };
+    };
+    _offerId;
+  };
+
+  private func _getOffers(_mintId : Nat32) : async* [Offer] {
+    let exist = HashMap.get(offers, _mintId, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        exist;
+      };
+      case (null) {
+        throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
+      };
+    };
+  };
+
   private func _mint(data : Metadata) {
     metaData := HashMap.insert(metaData, data.mintId, n32Hash, n32Equal, data).0;
     let owner = data.owner;
@@ -128,7 +155,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         holders := HashMap.insert(holders, owner, pHash, pEqual, tempMap).0;
       };
       case (null) {
-        var tempMap = HashMap.empty<Nat32,Metadata>();
+        var tempMap = HashMap.empty<Nat32, Metadata>();
         tempMap := HashMap.insert(tempMap, data.mintId, n32Hash, n32Equal, data).0;
         holders := HashMap.insert(holders, owner, pHash, pEqual, tempMap).0;
       };
@@ -150,7 +177,9 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
           token = offerRequest.token;
           expiration = offerRequest.expiration;
         };
-        offers := HashMap.insert(offers, currentId, n32Hash, n32Equal, offer).0;
+        var _offers = await* _getOffers(offerRequest.mintId);
+        _offers := Array.append(_offers, [offer]);
+        offers := HashMap.insert(offers, currentId, n32Hash, n32Equal, _offers).0;
         currentId;
       };
       case (null) {
@@ -168,30 +197,30 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         switch (exist2) {
           case (?exist2) {
             let tempMap = HashMap.remove(exist, _mintId, n32Hash, n32Equal);
-            switch(tempMap.1){
-              case(?value){
+            switch (tempMap.1) {
+              case (?value) {
                 holders := HashMap.insert(holders, from, pHash, pEqual, tempMap.0).0;
                 let tempMap2 = HashMap.insert(exist2, _mintId, n32Hash, n32Equal, value);
                 holders := HashMap.insert(holders, to, pHash, pEqual, tempMap2.0).0;
               };
-              case(null){
+              case (null) {
                 throw (Error.reject("No Data for mintId " #Nat32.toText(_mintId)));
-              }
-            }
+              };
+            };
           };
           case (null) {
             let tempMap = HashMap.remove(exist, _mintId, n32Hash, n32Equal);
-            switch(tempMap.1){
-              case(?value){
+            switch (tempMap.1) {
+              case (?value) {
                 holders := HashMap.insert(holders, from, pHash, pEqual, tempMap.0).0;
                 var tempMap2 = HashMap.empty<Nat32, Metadata>();
                 tempMap2 := HashMap.insert(tempMap2, _mintId, n32Hash, n32Equal, value).0;
                 holders := HashMap.insert(holders, to, pHash, pEqual, tempMap2).0;
               };
-              case(null){
+              case (null) {
                 throw (Error.reject("No Data for mintId " #Nat32.toText(_mintId)));
-              }
-            }
+              };
+            };
           };
         };
       };
@@ -199,7 +228,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         throw (Error.reject("Invalid Holder"));
       };
     };
-
+    let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
   };
 
   private func _acceptOffer(offer : Offer) : async () {
