@@ -206,6 +206,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     let _allowance = await _tokenAllowance(offer);
     assert (_allowance >= offer.amount);
     await _tokenTransferFrom(offer);
+    await* _transfer(offer.seller, offer.buyer, offer.mintId)
 
   };
 
