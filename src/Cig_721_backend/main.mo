@@ -158,6 +158,11 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     result;
   };
 
+  public shared ({caller}) func transfer(to : Principal, _mintId : Nat32): async () {
+    assert(_isOwner(caller, _mintId));
+    await* _transfer(caller, to, _mintId);
+  };
+
   public shared ({ caller }) func sell(_mintId : Nat32, offerRequest : OfferRequest) : async () {
     assert (_isOwner(caller, _mintId));
     sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
