@@ -202,6 +202,11 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     await* _winningBid(_mintId);
   };
 
+  public shared ({ caller }) func remove(_mintId : Nat32) : async () {
+    assert (_isOwner(caller, _mintId));
+    await _remove(_mintId);
+  };
+
   //Call close mint to set the Owner to this canister and prevent additioanl minting
   public shared ({ caller }) func closeMint() : async () {
     collectionOwner := Principal.fromActor(this);
@@ -252,6 +257,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
   public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
+    await _remove(_mintId);
     await* _transfer(to, _mintId);
   };
 
@@ -261,6 +267,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     switch (exist) {
       case (?exist) {
         if (exist == caller) {
+          await _remove(_mintId);
           await* _transfer(to, _mintId);
         };
       };
@@ -272,8 +279,8 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
   public shared ({ caller }) func approve(to : Principal, _mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
+    await _remove(_mintId);
     approved := HashMap.insert(approved, _mintId, n32Hash, n32Equal, to).0;
-    _removeOffers(_mintId);
   };
 
   public shared ({ caller }) func allowance(_owner : Principal, _mintId : Nat32) : async Bool {
@@ -291,6 +298,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
   public shared ({ caller }) func sell(offerRequest : OfferRequest) : async () {
     assert (_isOwner(caller, offerRequest.mintId));
+    await _remove(offerRequest.mintId);
     sales := HashMap.insert(sales, offerRequest.mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
@@ -298,7 +306,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     await _bid(_mintId, bidRequest, caller);
   };
 
-  public shared ({ caller }) func auction(auctonRequest : AuctionRequest,) : async () {
+  public shared ({ caller }) func auction(auctonRequest : AuctionRequest) : async () {
     assert (_isOwner(caller, auctonRequest.mintId));
     let exist = HashMap.get(auctions, auctonRequest.mintId, n32Hash, n32Equal);
     switch (exist) {
@@ -306,6 +314,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
       };
       case (null) {
+        await _remove(auctonRequest.mintId);
         let _auction = {
           end = Time.now() + auctonRequest.duration;
           mintId = auctonRequest.mintId;
@@ -561,12 +570,21 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
         throw (Error.reject("Invalid Holder"));
       };
     };
-    _removeOffers(_mintId);
+    await _remove(_mintId);
     manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
 
   };
 
-  private func _removeOffers(_mintId : Nat32) {
+  private func _remove(_mintId : Nat32): async () {
+    let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
+    switch(exist){
+      case(?exist){
+        await _tokenTransfer(exist)
+      };
+      case(null){
+
+      };
+    };
     offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
     approved := HashMap.remove(approved, _mintId, n32Hash, n32Equal).0;
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
