@@ -48,8 +48,10 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
   private stable var holders = HashMap.empty<Principal, HashMap.HashMap<Nat32, Metadata>>();
+  private stable var manifest = HashMap.empty<Nat32, Principal>();
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
+  private stable var sales = HashMap.empty<Nat32, OfferRequest>();
 
   public query func getMemorySize() : async Nat {
     let size = Prim.rts_memory_size();
@@ -110,7 +112,38 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
       data = Text.encodeUtf8(jsonString);
     };
     _mint(data);
+    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
     currentId;
+  };
+
+  public shared ({ caller }) func sell(_mintId : Nat32, offerRequest : OfferRequest) : async () {
+    assert (_isOwner(caller, _mintId));
+    sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
+  };
+
+  public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
+    let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
+    switch (offerRequest) {
+      case (?offerRequest) {
+        let currentId = offerId;
+        offerId := offerId + 1;
+        let offer = {
+          offerId = currentId;
+          mintId = offerRequest.mintId;
+          seller = Principal.fromActor(this);
+          buyer = caller;
+          amount = offerRequest.amount;
+          token = offerRequest.token;
+          expiration = offerRequest.expiration;
+        };
+        await _acceptOffer(offer);
+        let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
+        currentId
+      };
+      case (null) {
+        throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
+      };
+    };
   };
 
   public shared ({ caller }) func makeOffer(offerRequest : OfferRequest) : async Nat32 {
@@ -229,6 +262,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
       };
     };
     let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
+    manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
   };
 
   private func _acceptOffer(offer : Offer) : async () {
@@ -262,6 +296,26 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
       };
       case (#EXT(value)) {
         throw (Error.reject("No Implmentation"));
+      };
+    };
+  };
+
+  private func _isOwner(caller : Principal, _mintId : Nat32) : Bool {
+    let exist = HashMap.get(holders, caller, pHash, pEqual);
+    switch (exist) {
+      case (?exist) {
+        let exist2 = HashMap.get(exist, _mintId, n32Hash, n32Equal);
+        switch (exist2) {
+          case (?exist2) {
+            true;
+          };
+          case (null) {
+            false;
+          };
+        };
+      };
+      case (null) {
+        false;
       };
     };
   };
