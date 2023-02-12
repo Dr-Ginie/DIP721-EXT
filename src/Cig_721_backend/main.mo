@@ -31,7 +31,7 @@ import Utils "common/Utils";
 import Token "./models/Token";
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
-actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
+actor class Cig721(_collectionOwner : Principal, _royalty : Float, _name : Text) = this {
 
   private type Metadata = Metadata.Metadata;
   private type MintRequest = MintRequest.MintRequest;
@@ -54,6 +54,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var collectionOwner = _collectionOwner;
   private stable var collectionCreator = _collectionOwner;
   private stable let royalty = _royalty;
+  private stable let name = _name;
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
@@ -79,6 +80,14 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   public query func getCycles() : async Nat {
     Cycles.balance();
+  };
+
+  public query func getName() : async Text {
+    name;
+  };
+
+  public query func getRoyalty() : async Float {
+    royalty;
   };
 
   public query func getOwner(_mintId : Nat32) : async Principal {
