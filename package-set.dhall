@@ -36,6 +36,11 @@ let packages = [
   , version = "v0.1.2"
   , dependencies = [ "base", "encoding", "io" ]
   },
+  { name = "base"
+  , repo = "https://github.com/dfinity/motoko-base"
+  , version = "7522808e315cd89e70096488728c24bec09576af" -- Motoko 0.7.6
+  , dependencies = [] : List Text
+  },
   { name = "json"
   , repo = "https://github.com/aviate-labs/json.mo"
   , version = "v0.2.1"

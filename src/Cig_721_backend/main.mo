@@ -28,7 +28,7 @@ import ICRC2 "./services/ICRC2";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
 import Token "./models/Token";
-import Bid "models/Bid";
+import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
 actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
@@ -37,7 +37,6 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private type Offer = Offer.Offer;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Token.Token;
-  private type Bid = Bid.Bid;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -62,7 +61,8 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
   private stable var sales = HashMap.empty<Nat32, OfferRequest>();
   private stable var approved = HashMap.empty<Nat32, Principal>();
-  private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Bid>>();
+  private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
+  private stable var winningBids = HashMap.empty<Nat32, Offer>();
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -129,8 +129,11 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
       };
     };
   };
-
   ///Update Methods
+
+  public func winningBid(_mintId : Nat32) : async Offer {
+    await* _winningBid(_mintId);
+  };
 
   //Call close mint to set the Owner to this canister and prevent additioanl minting
   public shared ({ caller }) func closeMint() : async () {
@@ -190,9 +193,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   public shared ({ caller }) func approve(to : Principal, _mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
     approved := HashMap.insert(approved, _mintId, n32Hash, n32Equal, to).0;
-    sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
-    offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
-    bids := HashMap.remove(bids, _mintId, n32Hash, n32Equal).0;
+    _removeOffers(_mintId);
   };
 
   public shared ({ caller }) func allowance(_owner : Principal, _mintId : Nat32) : async Bool {
@@ -213,22 +214,67 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
-  public shared ({ caller }) func bid(_mintId : Nat32, bidRequest : Bid) : async () {
-    _bid(_mintId, bidRequest);
+  public shared ({ caller }) func bid(_mintId : Nat32, bidRequest : Offer) : async () {
+    await _bid(_mintId, bidRequest);
   };
 
-  private func _bid(_mintId : Nat32, bidRequest : Bid) {
+  private func _bid(_mintId : Nat32, bidRequest : Offer): async () {
     let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
+    let _winningBid = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
     let _owner = _getOwner(_mintId);
-    switch (exist) {
-      case (?exist) {
-        let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
-        bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+    await _tokenTransferFrom(bidRequest);
+    switch (_winningBid) {
+      case (?_winningBid) {
+        if (bidRequest.amount > _winningBid.amount) {
+          winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
+          switch (exist) {
+            case (?exist) {
+              let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+            };
+            case (null) {
+              var tempMap = HashMap.empty<Principal, Offer>();
+              tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+              bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+            };
+          };
+        };
       };
       case (null) {
-        var tempMap = HashMap.empty<Principal, Bid>();
-        tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
-        bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+        winningBids := HashMap.insert(winningBids, _mintId, n32Hash, n32Equal, bidRequest).0;
+        switch (exist) {
+          case (?exist) {
+            let tempMap = HashMap.insert(exist, _owner, pHash, pEqual, bidRequest).0;
+            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+          };
+          case (null) {
+            var tempMap = HashMap.empty<Principal, Offer>();
+            tempMap := HashMap.insert(tempMap, _owner, pHash, pEqual, bidRequest).0;
+            bids := HashMap.insert(bids, _mintId, n32Hash, n32Equal, tempMap).0;
+          };
+        };
+      };
+    };
+  };
+
+  public shared ({ caller }) func list(_mintId : Nat32, duration : Nat) : async () {
+    assert (_isOwner(caller, _mintId));
+    ignore setTimer(
+      #seconds(duration),
+      func() : async () {
+        await _endBid(_mintId);
+      },
+    );
+  };
+
+  private func _endBid(_mintId : Nat32) : async () {
+    let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+       await _acceptOffer(exist)
+      };
+      case (null) {
+
       };
     };
   };
@@ -251,7 +297,11 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
           token = offerRequest.token;
           expiration = offerRequest.expiration;
         };
-        await _acceptOffer(offer);
+        try {
+          await _acceptOffer(offer);
+        } catch (e) {
+          assert (false);
+        };
         currentId;
       };
       case (null) {
@@ -271,7 +321,11 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
       case (?offer) {
         let isExpired = _isExpired(offer.expiration);
         assert (isExpired == false);
-        await _acceptOffer(offer);
+        try {
+          await _acceptOffer(offer);
+        } catch (e) {
+          assert (false);
+        };
       };
       case (null) {
         throw (Error.reject("No Data for OfferId " #Nat32.toText(_offerId)));
@@ -390,21 +444,37 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         throw (Error.reject("Invalid Holder"));
       };
     };
+    _removeOffers(_mintId);
+    manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
 
+  };
+
+  private func _removeOffers(_mintId:Nat32) {
     offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
     approved := HashMap.remove(approved, _mintId, n32Hash, n32Equal).0;
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
     bids := HashMap.remove(bids, _mintId, n32Hash, n32Equal).0;
-    manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
-
+    winningBids := HashMap.remove(winningBids, _mintId, n32Hash, n32Equal).0;
   };
 
   private func _acceptOffer(offer : Offer) : async () {
     let _allowance = await _tokenAllowance(offer);
     assert (_allowance >= offer.amount);
-    await _tokenTransferFrom(offer);
+    await _tokenTransfer(offer);
     await* _transfer(offer.seller, offer.buyer, offer.mintId)
 
+  };
+
+  private func _winningBid(_mintId : Nat32) : async* Offer {
+    let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        exist;
+      };
+      case (null) {
+        throw (Error.reject("No Data for mintId " #Nat32.toText(_mintId)));
+      };
+    };
   };
 
   private func _tokenAllowance(offer : Offer) : async Nat {
@@ -466,34 +536,34 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
-  private func _tokenTransferFrom(offer : Offer) : async () {
+  private func _tokenTransfer(offer : Offer) : async () {
     assert (offer.amount > 0);
     switch (offer.token) {
       case (#Cig20(value)) {
         let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, _amount);
-        let royaltyResult = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, Utils.floatToNat(royalties));
+        let result = await Cig20.service(value).transfer(offer.buyer, _amount);
+        let royaltyResult = await Cig20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
 
           };
           case (#Err(value)) {
-            assert (false);
+            throw (Error.reject("Token Transfer Error"));
           };
         };
       };
       case (#Dip20(value)) {
         let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
         let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Dip20.service(value).transferFrom(offer.seller, offer.buyer, _amount);
-        let royaltyResult = await Dip20.service(value).transferFrom(offer.seller, collectionCreator, Utils.floatToNat(royalties));
+        let result = await Dip20.service(value).transfer(offer.buyer, _amount);
+        let royaltyResult = await Dip20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
 
           };
           case (#Err(value)) {
-            assert (false);
+            throw (Error.reject("Token Transfer Error"));
           };
         };
       };
@@ -506,17 +576,17 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         let to = { owner = offer.buyer; subaccount = null };
         let toRoyalties = { owner = collectionCreator; subaccount = null };
 
-        let args : ICRC2.TransferFromArgs = {
+        let args : ICRC2.TransferArgs = {
           from = from;
           to = to;
-          amount = offer.amount;
+          amount = _amount;
           fee = 0;
           memo = Text.encodeUtf8("");
           created_at_time = 0;
 
         };
 
-        let argsRoyalties : ICRC2.TransferFromArgs = {
+        let argsRoyalties : ICRC2.TransferArgs = {
           from = from;
           to = toRoyalties;
           amount = Utils.floatToNat(royalties);
@@ -534,7 +604,66 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
           };
           case (#Err(value)) {
-            assert (false);
+            throw (Error.reject("Token Transfer Error"));
+          };
+        };
+
+      };
+      case (#EXT(value)) {
+        throw (Error.reject("No Implmentation"));
+      };
+    };
+  };
+
+  private func _tokenTransferFrom(offer : Offer) : async () {
+    assert (offer.amount > 0);
+    switch (offer.token) {
+      case (#Cig20(value)) {
+        let result = await Cig20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
+        switch (result) {
+          case (#Ok(value)) {
+
+          };
+          case (#Err(value)) {
+            throw (Error.reject("Token Transfer Error"));
+          };
+        };
+      };
+      case (#Dip20(value)) {
+        let result = await Dip20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
+        switch (result) {
+          case (#Ok(value)) {
+
+          };
+          case (#Err(value)) {
+            throw (Error.reject("Token Transfer Error"));
+          };
+        };
+      };
+      case (#IRC2(value)) {
+        let now = Time.now();
+
+        let from = { owner = offer.buyer; subaccount = null };
+        let to = { owner =Principal.fromActor(this); subaccount = null };
+        let toRoyalties = { owner = collectionCreator; subaccount = null };
+
+        let args : ICRC2.TransferArgs = {
+          from = from;
+          to = to;
+          amount = offer.amount;
+          fee = 0;
+          memo = Text.encodeUtf8("");
+          created_at_time = 0;
+
+        };
+
+        let result = await ICRC2.service(value).icrc2_transfer_from(args);
+        switch (result) {
+          case (#Ok(value)) {
+
+          };
+          case (#Err(value)) {
+            throw (Error.reject("Token Transfer Error"));
           };
         };
 

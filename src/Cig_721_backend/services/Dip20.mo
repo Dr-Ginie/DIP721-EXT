@@ -23,11 +23,13 @@ module {
         balanceOf : shared query Principal -> async Nat;
         allowance : shared query (Principal, Principal) -> async Nat;
         transferFrom : shared (Principal, Principal, Nat) -> async TxReceipt;
+        transfer : shared (Principal, Nat) -> async TxReceipt;
     } {
         return actor (canister) : actor {
             balanceOf : shared query Principal -> async Nat;
             allowance : shared query (Principal, Principal) -> async Nat;
             transferFrom : shared (Principal, Principal, Nat) -> async TxReceipt;
+            transfer : shared (Principal, Nat) -> async TxReceipt;
         };
     };
 };

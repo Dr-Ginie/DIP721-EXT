@@ -24,5 +24,18 @@
       "packtool": "vessel sources"
     }
   },
+  "dfx": "0.12.1",
+  "networks": {
+    "staging": {
+      "providers": [
+        "https://ic0.app"
+      ],
+      "type": "persistent"
+    },
+    "local": {
+      "bind": "127.0.0.1:8000",
+      "type": "ephemeral"
+    }
+  },
   "version": 1
 }

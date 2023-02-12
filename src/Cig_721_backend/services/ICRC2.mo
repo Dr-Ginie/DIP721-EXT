@@ -34,7 +34,7 @@ module {
         expires_at : Nat64;
     };
 
-    public type TransferFromArgs = {
+    public type TransferArgs = {
         from : Account;
         to : Account;
         amount : Nat;
@@ -46,12 +46,14 @@ module {
     public func service(canister : Text) : actor {
         icrc1_balance_of : shared query Principal -> async Nat;
         icrc2_allowance : shared query (AllowanceArgs) -> async Allowance;
-        icrc2_transfer_from : shared (TransferFromArgs) -> async TxReceipt;
+        icrc2_transfer_from : shared (TransferArgs) -> async TxReceipt;
+        icrc1_transfer : shared (TransferArgs) -> async TxReceipt;
     } {
         return actor (canister) : actor {
             icrc1_balance_of : shared query Principal -> async Nat;
             icrc2_allowance : shared query (AllowanceArgs) -> async Allowance;
-            icrc2_transfer_from : shared (TransferFromArgs) -> async TxReceipt;
+            icrc2_transfer_from : shared (TransferArgs) -> async TxReceipt;
+            icrc1_transfer : shared (TransferArgs) -> async TxReceipt;
         };
     };
 };
