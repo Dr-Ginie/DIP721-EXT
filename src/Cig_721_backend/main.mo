@@ -164,6 +164,21 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     await* _transfer(caller, to, _mintId);
   };
 
+  public shared ({caller}) func transferFrom(from : Principal, to : Principal, _mintId : Nat32): async () {
+    assert(_isOwner(from, _mintId));
+    let exist = HashMap.get(approved, _mintId, n32Hash, n32Equal);
+    switch(exist){
+      case(?exist){
+        if (exist == caller){
+          await* _transfer(from, to, _mintId);
+        };
+      };
+      case(null){
+        throw (Error.reject("Unauthorized " #Nat32.toText(_mintId)));
+      }
+    };
+  };
+
   public shared ({caller}) func approve(to : Principal, _mintId : Nat32): async () {
     assert(_isOwner(caller, _mintId));
     approved := HashMap.insert(approved, _mintId, n32Hash, n32Equal, to).0;
@@ -365,7 +380,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     approved := HashMap.remove(approved, _mintId, n32Hash, n32Equal).0;
     sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
     manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
-    
+
   };
 
   private func _acceptOffer(offer : Offer) : async () {
