@@ -421,11 +421,13 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
       case (?exist) {
         let tempMap = HashMap.insert(exist, data.mintId, n32Hash, n32Equal, data).0;
         holders := HashMap.insert(holders, _owner, pHash, pEqual, tempMap).0;
+        metaData := HashMap.insert(metaData, data.mintId, n32Hash, n32Equal, data).0;
       };
       case (null) {
         var tempMap = HashMap.empty<Nat32, Metadata>();
         tempMap := HashMap.insert(tempMap, data.mintId, n32Hash, n32Equal, data).0;
         holders := HashMap.insert(holders, _owner, pHash, pEqual, tempMap).0;
+        metaData := HashMap.insert(metaData, data.mintId, n32Hash, n32Equal, data).0;
       };
     };
   };
@@ -457,10 +459,15 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
+  public func endAuction(_mintId : Nat32) : async () {
+    await _endAuction(_mintId)
+  };
+
   private func _endAuction(_mintId : Nat32) : async () {
     let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
+        winningBids := HashMap.remove(winningBids, _mintId, n32Hash, n32Equal).0;
         await _acceptOffer(exist);
       };
       case (null) {
