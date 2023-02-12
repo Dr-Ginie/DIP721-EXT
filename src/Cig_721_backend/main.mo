@@ -172,7 +172,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
-    await* _transfer(caller, to, _mintId);
+    await* _transfer(to, _mintId);
   };
 
   public shared ({ caller }) func transferFrom(from : Principal, to : Principal, _mintId : Nat32) : async () {
@@ -181,7 +181,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     switch (exist) {
       case (?exist) {
         if (exist == caller) {
-          await* _transfer(from, to, _mintId);
+          await* _transfer(to, _mintId);
         };
       };
       case (null) {
@@ -416,7 +416,8 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
-  private func _transfer(from : Principal, to : Principal, _mintId : Nat32) : async* () {
+  private func _transfer(to : Principal, _mintId : Nat32) : async* () {
+    let from = _getOwner(_mintId);
     let exist = HashMap.get(holders, from, pHash, pEqual);
     let exist2 = HashMap.get(holders, to, pHash, pEqual);
 
@@ -473,7 +474,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     let _allowance = await _tokenAllowance(offer);
     assert (_allowance >= offer.amount);
     await _tokenTransfer(offer);
-    await* _transfer(offer.seller, offer.buyer, offer.mintId)
+    await* _transfer(offer.buyer, offer.mintId)
 
   };
 
