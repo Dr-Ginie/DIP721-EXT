@@ -54,6 +54,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
   private stable var sales = HashMap.empty<Nat32, OfferRequest>();
+  private stable var approved = HashMap.empty<Nat32, Principal>();
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -163,6 +164,26 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     await* _transfer(caller, to, _mintId);
   };
 
+  public shared ({caller}) func approve(to : Principal, _mintId : Nat32): async () {
+    assert(_isOwner(caller, _mintId));
+    approved := HashMap.insert(approved, _mintId, n32Hash, n32Equal, to).0;
+    sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
+    offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
+  };
+
+  public shared ({caller}) func allowance(_owner : Principal, _mintId : Nat32): async Bool {
+    assert(_isOwner(_owner, _mintId));
+    let exist = HashMap.get(approved, _mintId, n32Hash, n32Equal);
+    switch(exist){
+      case(?exist){
+        exist == caller
+      };
+      case(null){
+        false
+      }
+    };
+  };
+
   public shared ({ caller }) func sell(_mintId : Nat32, offerRequest : OfferRequest) : async () {
     assert (_isOwner(caller, _mintId));
     sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
@@ -199,7 +220,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
           expiration = offerRequest.expiration;
         };
         await _acceptOffer(offer);
-        let _ = HashMap.remove(sales, _mintId, n32Hash, n32Equal);
+        sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
         currentId;
       };
       case (null) {
@@ -220,7 +241,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         let isExpired = _isExpired(offer.expiration);
         assert(isExpired == false);
         await _acceptOffer(offer);
-        let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
+        offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
       };
       case (null) {
         throw (Error.reject("No Data for OfferId " #Nat32.toText(_offerId)));
@@ -339,8 +360,12 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         throw (Error.reject("Invalid Holder"));
       };
     };
-    let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
+
+    offers := HashMap.remove(offers, _mintId, n32Hash, n32Equal).0;
+    approved := HashMap.remove(approved, _mintId, n32Hash, n32Equal).0;
+    sales := HashMap.remove(sales, _mintId, n32Hash, n32Equal).0;
     manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
+    
   };
 
   private func _acceptOffer(offer : Offer) : async () {
