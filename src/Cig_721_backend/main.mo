@@ -128,7 +128,9 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         holders := HashMap.insert(holders, owner, pHash, pEqual, tempMap).0;
       };
       case (null) {
-
+        var tempMap = HashMap.empty<Nat32,Metadata>();
+        tempMap := HashMap.insert(tempMap, data.mintId, n32Hash, n32Equal, data).0;
+        holders := HashMap.insert(holders, owner, pHash, pEqual, tempMap).0;
       };
     };
   };
@@ -157,33 +159,44 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
-  private func _transfer(from : Principal, to : Principal, _mintId : Nat32) {
+  private func _transfer(from : Principal, to : Principal, _mintId : Nat32) : async* () {
     let exist = HashMap.get(holders, from, pHash, pEqual);
     let exist2 = HashMap.get(holders, to, pHash, pEqual);
 
     switch (exist) {
       case (?exist) {
-        let tempMap = HashMap.remove(exist, _mintId, n32Hash, n32Equal);
-        holders := HashMap.insert(holders, from, pHash, pEqual, tempMap.0).0;
         switch (exist2) {
           case (?exist2) {
+            let tempMap = HashMap.remove(exist, _mintId, n32Hash, n32Equal);
             switch(tempMap.1){
               case(?value){
+                holders := HashMap.insert(holders, from, pHash, pEqual, tempMap.0).0;
                 let tempMap2 = HashMap.insert(exist2, _mintId, n32Hash, n32Equal, value);
                 holders := HashMap.insert(holders, to, pHash, pEqual, tempMap2.0).0;
               };
               case(null){
-
+                throw (Error.reject("No Data for mintId " #Nat32.toText(_mintId)));
               }
             }
           };
           case (null) {
-
+            let tempMap = HashMap.remove(exist, _mintId, n32Hash, n32Equal);
+            switch(tempMap.1){
+              case(?value){
+                holders := HashMap.insert(holders, from, pHash, pEqual, tempMap.0).0;
+                var tempMap2 = HashMap.empty<Nat32, Metadata>();
+                tempMap2 := HashMap.insert(tempMap2, _mintId, n32Hash, n32Equal, value).0;
+                holders := HashMap.insert(holders, to, pHash, pEqual, tempMap2).0;
+              };
+              case(null){
+                throw (Error.reject("No Data for mintId " #Nat32.toText(_mintId)));
+              }
+            }
           };
         };
       };
       case (null) {
-
+        throw (Error.reject("Invalid Holder"));
       };
     };
 
