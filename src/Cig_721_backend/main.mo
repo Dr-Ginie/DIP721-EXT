@@ -16,6 +16,7 @@ import Trie "mo:base/Trie";
 import Metadata "models/Metadata";
 import MintRequest "models/MintRequest";
 import Offer "models/Offer";
+import Bid "models/Bid";
 import Principal "mo:base/Principal";
 import Prim "mo:prim";
 import Cycles "mo:base/ExperimentalCycles";
@@ -35,6 +36,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private type Metadata = Metadata.Metadata;
   private type MintRequest = MintRequest.MintRequest;
   private type Offer = Offer.Offer;
+  private type Bid = Bid.Bid;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Token.Token;
 
@@ -83,7 +85,41 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     _getOwner(_mintId);
   };
 
-  public query func getOwners(_mintIds : [Nat32]) : async [{
+  public query func fetchOffers(_mintId : Nat32) : async [Offer] {
+    let exist = HashMap.get(offers, _mintId, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        exist;
+      };
+      case (null) { [] };
+    };
+  };
+
+  public query func fetchBids(_mintId : Nat32) : async [Bid] {
+    let exist = HashMap.get(bids, _mintId, n32Hash, n32Equal);
+    var _bids = Buffer.Buffer<Bid>(0);
+    switch (exist) {
+      case (?exist) {
+        for ((owner, _offer) in HashMap.entries(exist)) {
+          _bids.add({ owner = owner; offer = _offer });
+        };
+      };
+      case (null) {
+
+      };
+    };
+    Buffer.toArray(_bids);
+  };
+
+  public query func fetchsales(_mintId : Nat32) : async [OfferRequest] {
+    var _bids = Buffer.Buffer<OfferRequest>(0);
+    for ((id, _offer) in HashMap.entries(sales)) {
+      _bids.add(_offer);
+    };
+    Buffer.toArray(_bids);
+  };
+
+  public query func fetchOwners(_mintIds : [Nat32]) : async [{
     owner : Principal;
     mintId : Nat32;
   }] {
@@ -220,7 +256,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   public shared ({ caller }) func auction(offerRequest : OfferRequest, duration : Nat) : async () {
     assert (_isOwner(caller, offerRequest.mintId));
-    let offer:Offer = {
+    let offer : Offer = {
       offerId = 0;
       mintId = offerRequest.mintId;
       seller = caller;
