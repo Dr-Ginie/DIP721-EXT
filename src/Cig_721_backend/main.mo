@@ -43,7 +43,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   let n32Hash = func(a : Nat32) : Nat32 { a };
   let n32Equal = Nat32.equal;
 
-  let collectionOwner = _collectionOwner;
+  var collectionOwner = _collectionOwner;
   let royalty = _royalty;
   let icrc2Buffer = 1000000000 * 1;
 
@@ -122,6 +122,12 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   };
 
   ///Update Methods
+
+  //Call close mint to set the Owner to this canister and prevent additioanl minting
+  public shared ({caller}) func closeMint(): async () {
+    collectionOwner := Principal.fromActor(this);
+  };
+
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
     assert (caller == collectionOwner);
     let currentId = mintId;
