@@ -123,22 +123,30 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
     let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
+    let _owner = HashMap.get(manifest, _mintId, n32Hash, n32Equal);
     switch (offerRequest) {
       case (?offerRequest) {
-        let currentId = offerId;
-        offerId := offerId + 1;
-        let offer = {
-          offerId = currentId;
-          mintId = offerRequest.mintId;
-          seller = Principal.fromActor(this);
-          buyer = caller;
-          amount = offerRequest.amount;
-          token = offerRequest.token;
-          expiration = offerRequest.expiration;
+        switch (_owner) {
+          case (?_owner) {
+            let currentId = offerId;
+            offerId := offerId + 1;
+            let offer = {
+              offerId = currentId;
+              mintId = offerRequest.mintId;
+              seller = _owner;
+              buyer = caller;
+              amount = offerRequest.amount;
+              token = offerRequest.token;
+              expiration = offerRequest.expiration;
+            };
+            await _acceptOffer(offer);
+            let _ = HashMap.remove(sales, _mintId, n32Hash, n32Equal);
+            currentId;
+          };
+          case (null) {
+            throw (Error.reject("No Data for Owner"));
+          };
         };
-        await _acceptOffer(offer);
-        let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
-        currentId
       };
       case (null) {
         throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
