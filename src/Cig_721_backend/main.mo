@@ -7,6 +7,7 @@ import SHA256 "mo:crypto/SHA/SHA256";
 import Hex "mo:encoding/Hex";
 import Blob "mo:base/Blob";
 import Text "mo:base/Text";
+import Float "mo:base/Float";
 import Array "mo:base/Array";
 import Iter "mo:base/Iter";
 import Error "mo:base/Error";
@@ -25,6 +26,7 @@ import Dip20 "./services/Dip20";
 import Cig20 "./services/Cig20";
 import ICRC2 "./services/ICRC2";
 import Nat64 "mo:base/Nat64";
+import Utils "common/Utils";
 
 actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
@@ -43,9 +45,11 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   let n32Hash = func(a : Nat32) : Nat32 { a };
   let n32Equal = Nat32.equal;
 
-  var collectionOwner = _collectionOwner;
-  let royalty = _royalty;
   let icrc2Buffer = 1000000000 * 1;
+
+  private stable var collectionOwner = _collectionOwner;
+  private stable var collectionCreator = _collectionOwner;
+  private stable let royalty = _royalty;
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
@@ -439,9 +443,13 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   };
 
   private func _tokenTransferFrom(offer : Offer) : async () {
+    assert(offer.amount > 0);
     switch (offer.token) {
       case (#Cig20(value)) {
-        let result = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, offer.amount);
+        let royalties = Float.mul(Utils.natToFloat(offer.amount),royalty);
+        let _amount = offer.amount - Utils.floatToNat(royalties);
+        let result = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, _amount);
+        let royaltyResult = await Cig20.service(value).transferFrom(offer.seller, offer.buyer, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
 
@@ -452,7 +460,10 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         };
       };
       case (#Dip20(value)) {
-        let result = await Dip20.service(value).transferFrom(offer.seller, offer.buyer, offer.amount);
+        let royalties = Float.mul(Utils.natToFloat(offer.amount),royalty);
+        let _amount = offer.amount - Utils.floatToNat(royalties);
+        let result = await Dip20.service(value).transferFrom(offer.seller, offer.buyer, _amount);
+        let royaltyResult = await Dip20.service(value).transferFrom(offer.seller, collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
 
@@ -463,9 +474,14 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
         };
       };
       case (#IRC2(value)) {
+        let royalties = Float.mul(Utils.natToFloat(offer.amount),royalty);
+        let _amount = offer.amount - Utils.floatToNat(royalties);
         let now = Time.now();
+
         let from = { owner = offer.seller; subaccount = null };
         let to = { owner = offer.buyer; subaccount = null };
+        let toRoyalties = { owner = collectionCreator; subaccount = null };
+
         let args : ICRC2.TransferFromArgs = {
           from = from;
           to = to;
@@ -475,7 +491,20 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
           created_at_time = 0;
 
         };
+
+        let argsRoyalties : ICRC2.TransferFromArgs = {
+          from = from;
+          to = toRoyalties;
+          amount = Utils.floatToNat(royalties);
+          fee = 0;
+          memo = Text.encodeUtf8("");
+          created_at_time = 0;
+
+        };
+
         let result = await ICRC2.service(value).icrc2_transfer_from(args);
+        let royaltyResult = await ICRC2.service(value).icrc2_transfer_from(argsRoyalties);
+
         switch (result) {
           case (#Ok(value)) {
 
