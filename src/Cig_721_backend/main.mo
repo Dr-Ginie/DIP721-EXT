@@ -13,6 +13,7 @@ import Error "mo:base/Error";
 import TrieMap "mo:base/TrieMap";
 import Trie "mo:base/Trie";
 import Metadata "models/Metadata";
+import MintRequest "models/MintRequest";
 import Offer "models/Offer";
 import Principal "mo:base/Principal";
 import Prim "mo:prim";
@@ -28,6 +29,7 @@ import Nat64 "mo:base/Nat64";
 actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   private type Metadata = Metadata.Metadata;
+  private type MintRequest = MintRequest.MintRequest;
   private type Offer = Offer.Offer;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Offer.Token;
@@ -67,6 +69,21 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     Cycles.balance();
   };
 
+  public query func getOwner(_mintId : Nat32) : async Principal {
+    _getOwner(_mintId);
+  };
+
+  public query func getOwners(_mintIds : [Nat32]) : async [{
+    owner : Principal;
+    mintId : Nat32;
+  }] {
+    var result = Buffer.Buffer<{ owner : Principal; mintId : Nat32 }>(0);
+    for (_mintId in _mintIds.vals()) {
+      result.add({ owner = _getOwner(_mintId); mintId = _mintId });
+    };
+    Buffer.toArray(result);
+  };
+
   public query func balance(owner : Principal) : async [Metadata] {
     let exist = HashMap.get(holders, owner, pHash, pEqual);
     var result = Buffer.Buffer<Metadata>(0);
@@ -83,36 +100,54 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     Buffer.toArray(result);
   };
 
-  public query func getdata(owner : Principal, id : Nat32) : async Metadata {
-    let exist = HashMap.get(holders, owner, pHash, pEqual);
+  public query func getdata(_mintId : Nat32) : async Metadata {
+    let _owner = _getOwner(_mintId);
+    let exist = HashMap.get(holders, _owner, pHash, pEqual);
     switch (exist) {
       case (?exist) {
-        switch (HashMap.get(exist, id, n32Hash, n32Equal)) {
+        switch (HashMap.get(exist, _mintId, n32Hash, n32Equal)) {
           case (?data) {
             data;
           };
           case (null) {
-            throw (Error.reject("No Data for mintId " #Nat32.toText(id)));
+            throw (Error.reject("No Data for mintId " #Nat32.toText(_mintId)));
           };
         };
       };
       case (null) {
-        throw (Error.reject("No Data for Principal " #Principal.toText(owner)));
+        throw (Error.reject("No Data for Principal " #Principal.toText(_owner)));
       };
     };
   };
 
-  public shared ({ caller }) func mint(jsonString : Text, owner : Principal) : async Nat32 {
+  public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
     assert (caller == collectionOwner);
     let currentId = mintId;
     mintId := mintId + 1;
-    let data : Metadata = {
+    let _metadata : Metadata = {
       mintId = currentId;
-      data = Text.encodeUtf8(jsonString);
+      data = request.data;
     };
-    _mint(data, owner);
+    _mint(_metadata, request.owner);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
     currentId;
+  };
+
+  public shared ({ caller }) func bulkMint(requests : [MintRequest]) : async [Nat32] {
+    assert (caller == collectionOwner);
+    var result : [Nat32] = [];
+    for (request in requests.vals()) {
+      let currentId = mintId;
+      mintId := mintId + 1;
+      let _metadata : Metadata = {
+        mintId = currentId;
+        data = request.data;
+      };
+      _mint(_metadata, request.owner);
+      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+      result := Array.append(result, [currentId]);
+    };
+    result;
   };
 
   public shared ({ caller }) func sell(_mintId : Nat32, offerRequest : OfferRequest) : async () {
@@ -122,7 +157,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
     let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
-    let _owner = await* _getOwner(_mintId);
+    let _owner = _getOwner(_mintId);
     switch (offerRequest) {
       case (?offerRequest) {
         let currentId = offerId;
@@ -165,14 +200,15 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     _offerId;
   };
 
-  private func _getOwner(_mintId : Nat32) : async* Principal {
+  private func _getOwner(_mintId : Nat32) : Principal {
     let _owner = HashMap.get(manifest, _mintId, n32Hash, n32Equal);
     switch (_owner) {
       case (?_owner) {
         _owner;
       };
       case (null) {
-        throw (Error.reject("No Data for Owner"));
+        assert (true);
+        Principal.fromActor(this);
       };
     };
   };
@@ -208,7 +244,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
 
   private func _makeOffer(offerRequest : OfferRequest, caller : Principal) : async* Nat32 {
     let exist = HashMap.get(metaData, offerRequest.mintId, n32Hash, n32Equal);
-    let _owner = await* _getOwner(offerRequest.mintId);
+    let _owner = _getOwner(offerRequest.mintId);
     switch (exist) {
       case (?exist) {
         let currentId = offerId;
