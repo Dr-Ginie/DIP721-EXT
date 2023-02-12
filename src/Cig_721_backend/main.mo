@@ -55,6 +55,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
   private stable var sales = HashMap.empty<Nat32, OfferRequest>();
 
+  ///Query Methods
   public query func getMemorySize() : async Nat {
     let size = Prim.rts_memory_size();
     size;
@@ -100,7 +101,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     Buffer.toArray(result);
   };
 
-  public query func getdata(_mintId : Nat32) : async Metadata {
+  public query func getData(_mintId : Nat32) : async Metadata {
     let _owner = _getOwner(_mintId);
     let exist = HashMap.get(holders, _owner, pHash, pEqual);
     switch (exist) {
@@ -120,6 +121,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     };
   };
 
+  ///Update Methods
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
     assert (caller == collectionOwner);
     let currentId = mintId;
@@ -155,11 +157,25 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     sales := HashMap.insert(sales, mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
+  private func _isExpired(time:?Time.Time): Bool {
+    let now = Time.now();
+    switch(time){
+      case(?time){
+        time < now
+      };
+      case(null){
+        false
+      };
+    };
+  };
+
   public shared ({ caller }) func buy(_mintId : Nat32) : async Nat32 {
     let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
     let _owner = _getOwner(_mintId);
     switch (offerRequest) {
       case (?offerRequest) {
+        let isExpired = _isExpired(offerRequest.expiration);
+        assert(isExpired == false);
         let currentId = offerId;
         offerId := offerId + 1;
         let offer = {
@@ -190,6 +206,8 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     let offer = Array.find<Offer>(_offers, func(e : Offer) : Bool { e.offerId == _offerId });
     switch (offer) {
       case (?offer) {
+        let isExpired = _isExpired(offer.expiration);
+        assert(isExpired == false);
         await _acceptOffer(offer);
         let _ = HashMap.remove(offers, _mintId, n32Hash, n32Equal);
       };
@@ -200,6 +218,7 @@ actor class Cig721(_collectionOwner : Principal, _royalty : Float) = this {
     _offerId;
   };
 
+  ///Private Methods
   private func _getOwner(_mintId : Nat32) : Principal {
     let _owner = HashMap.get(manifest, _mintId, n32Hash, n32Equal);
     switch (_owner) {
