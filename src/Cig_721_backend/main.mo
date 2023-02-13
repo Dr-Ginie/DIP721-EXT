@@ -30,7 +30,7 @@ import Token "./models/Token";
 import Auction "./models/Auction";
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
-actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Text) = this {
+actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Text, _bannerImage : Blob, _profileImage : Blob) = this {
 
   private type Metadata = Metadata.Metadata;
   private type MintRequest = MintRequest.MintRequest;
@@ -56,6 +56,8 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private stable var collectionCreator = _collectionCreator;
   private stable let royalty = _royalty;
   private stable let name = _name;
+  private stable let banner = _bannerImage;
+  private stable let profile = _profileImage;
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
