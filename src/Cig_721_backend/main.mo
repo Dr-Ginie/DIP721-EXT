@@ -1,5 +1,6 @@
 import JSON "mo:json/JSON";
 import HashMap "mo:stable/HashMap";
+import StableBuffer "mo:stable-buffer/StableBuffer";
 import Debug "mo:base/Debug";
 import Buffer "mo:base/Buffer";
 import List "mo:base/List";
@@ -14,6 +15,7 @@ import Trie "mo:base/Trie";
 import Metadata "models/Metadata";
 import MintRequest "models/MintRequest";
 import Offer "models/Offer";
+import Price "models/Price";
 import Bid "models/Bid";
 import Principal "mo:base/Principal";
 import Prim "mo:prim";
@@ -35,6 +37,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private type Metadata = Metadata.Metadata;
   private type MintRequest = MintRequest.MintRequest;
   private type Offer = Offer.Offer;
+  private type Price = Price.Price;
   private type Bid = Bid.Bid;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Token.Token;
@@ -70,6 +73,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private stable var auctions = HashMap.empty<Nat32, Auction>();
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
+  private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -177,6 +181,10 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
       };
     };
     Buffer.toArray(result);
+  };
+
+  public query func fetchPriceHistory(_mintId:Nat32): async [Price] {
+    _fetchPriceHistory(_mintId)
   };
 
   public query func getData(_mintId : Nat32) : async Metadata {
@@ -404,6 +412,18 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
+  private func _fetchPriceHistory(_mintId:Nat32): [Price] {
+    let exist = HashMap.get(priceHistory, _mintId, n32Hash, n32Equal);
+    switch(exist){
+      case(?exist){
+        StableBuffer.toArray(exist)
+      };
+      case(null){
+        []
+      }
+    };
+  };
+
   private func _getOffers(_mintId : Nat32) : async* [Offer] {
     let exist = HashMap.get(offers, _mintId, n32Hash, n32Equal);
     switch (exist) {
@@ -603,6 +623,30 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     await _tokenTransfer(offer, offer.seller);
     await* _transfer(offer.buyer, offer.mintId)
 
+  };
+
+  private func _updatePriceHistory(offer : Offer) {
+    let exist = HashMap.get(priceHistory, offer.mintId, n32Hash, n32Equal);
+    let now = Time.now();
+    switch (exist) {
+      case (?exist) {
+        let _price:Price = {
+          offer = offer;
+          timeStamp = now;
+        };
+        StableBuffer.add(exist,_price);
+        priceHistory := HashMap.insert(priceHistory, offer.mintId, n32Hash, n32Equal, exist).0;
+      };
+      case (null) {
+        let _price:Price = {
+          offer = offer;
+          timeStamp = now;
+        };
+        let b = StableBuffer.init<Price>();
+        StableBuffer.add(b, _price);
+        priceHistory := HashMap.insert(priceHistory, offer.mintId, n32Hash, n32Equal, b).0;
+      };
+    };
   };
 
   private func _buy(offer : Offer) : async () {
