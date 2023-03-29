@@ -5,11 +5,8 @@
       "type": "motoko"
     },
     "Cig_721_frontend": {
-      "dependencies": [
-        "Cig_721_backend"
-      ],
       "frontend": {
-        "entrypoint": "src/Cig_721_frontend/src/index.html"
+        "entrypoint": "src/Cig_721_frontend/src/assets/main.dart.js"
       },
       "source": [
         "src/Cig_721_frontend/assets",
