@@ -62,6 +62,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private stable let description = _description;
   private stable let banner = _bannerImage;
   private stable let profile = _profileImage;
+  private stable var isMinting = false;
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
@@ -97,6 +98,10 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
   public query func getName() : async Text {
     name;
+  };
+
+  public query func getDescription() : async Text {
+    description;
   };
 
   public query func getRoyalty() : async Float {
@@ -184,8 +189,8 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     Buffer.toArray(result);
   };
 
-  public query func fetchPriceHistory(_mintId:Nat32): async [Price] {
-    _fetchPriceHistory(_mintId)
+  public query func fetchPriceHistory(_mintId : Nat32) : async [Price] {
+    _fetchPriceHistory(_mintId);
   };
 
   public query func getData(_mintId : Nat32) : async Metadata {
@@ -212,8 +217,33 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     _winningBid(_mintId);
   };
 
+  //Analytics
+  public query func ownerDistribution(from : Nat, to : Nat) : async Nat32 {
+    var count : Nat32 = 0;
+    for ((holder, map) in HashMap.entries(holders)) {
+      let size = holders.size;
 
-  ///Update Methods
+      if (size >= from and size <= to) {
+        count := count + 1;
+      };
+    };
+    count;
+  };
+
+  //Update Methods
+
+  public shared ({ caller }) func startMint(duration : Nat) : async Nat {
+    assert (caller == collectionOwner);
+    assert (isMinting == false);
+    isMinting := true;
+    setTimer(
+      #seconds(duration),
+      func() : async () {
+        isMinting := false;
+      },
+    );
+  };
+
   public shared ({ caller }) func remove(_mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
     await _remove(_mintId);
@@ -413,15 +443,13 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
-  private func _fetchPriceHistory(_mintId:Nat32): [Price] {
+  private func _fetchPriceHistory(_mintId : Nat32) : [Price] {
     let exist = HashMap.get(priceHistory, _mintId, n32Hash, n32Equal);
-    switch(exist){
-      case(?exist){
-        StableBuffer.toArray(exist)
+    switch (exist) {
+      case (?exist) {
+        StableBuffer.toArray(exist);
       };
-      case(null){
-        []
-      }
+      case (null) { [] };
     };
   };
 
@@ -483,7 +511,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     };
   };
 
-  private func _endAuction(_mintId : Nat32): async () {
+  private func _endAuction(_mintId : Nat32) : async () {
     let exist = HashMap.get(winningBids, _mintId, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
@@ -631,15 +659,15 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     let now = Time.now();
     switch (exist) {
       case (?exist) {
-        let _price:Price = {
+        let _price : Price = {
           offer = offer;
           timeStamp = now;
         };
-        StableBuffer.add(exist,_price);
+        StableBuffer.add(exist, _price);
         priceHistory := HashMap.insert(priceHistory, offer.mintId, n32Hash, n32Equal, exist).0;
       };
       case (null) {
-        let _price:Price = {
+        let _price : Price = {
           offer = offer;
           timeStamp = now;
         };
