@@ -268,7 +268,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   };*/
 
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
-    assert (caller == collectionOwner);
+    assert (isMinting == false);
     let currentId = mintId;
     mintId := mintId + 1;
     let _metadata : Metadata = {
@@ -281,7 +281,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   };
 
   public shared ({ caller }) func bulkMint(requests : [MintRequest]) : async [Nat32] {
-    assert (caller == collectionOwner);
+    assert (isMinting == false);
     var result : [Nat32] = [];
     for (request in requests.vals()) {
       let currentId = mintId;
