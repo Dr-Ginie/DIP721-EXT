@@ -2,15 +2,17 @@
   "name": "Cig_721_frontend",
   "version": "0.1.0",
   "description": "Internet Computer starter application",
-  "keywords": ["Internet Computer", "Motoko", "JavaScript", "Canister"],
+  "keywords": [
+    "Internet Computer",
+    "Motoko",
+    "JavaScript",
+    "Canister"
+  ],
   "scripts": {
     "build": "webpack",
     "start": "webpack serve --mode development --env development"
   },
   "devDependencies": {
-    "@dfinity/agent": "0.15.3",
-    "@dfinity/candid": "0.15.3",
-    "@dfinity/principal": "0.15.3",
     "assert": "2.0.0",
     "buffer": "6.0.3",
     "copy-webpack-plugin": "^11.0.0",
@@ -32,5 +34,10 @@
     "last 2 firefox version",
     "last 2 safari version",
     "last 2 edge version"
-  ]
+  ],
+  "dependencies": {
+    "@dfinity/auth-client": "^0.15.5",
+    "@dfinity/authentication": "^0.14.2",
+    "@dfinity/identity": "^0.15.5"
+  }
 }

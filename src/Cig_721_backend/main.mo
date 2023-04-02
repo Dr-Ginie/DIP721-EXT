@@ -29,10 +29,13 @@ import ICRC2 "./services/ICRC2";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
 import Token "./models/Token";
+import Payee "./models/Payee";
 import Auction "./models/Auction";
+import CollectionRequest "./models/CollectionRequest";
+
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
-actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Text, _description : Text, _bannerImage : Blob, _profileImage : Blob) = this {
+actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this {
 
   private type Metadata = Metadata.Metadata;
   private type MintRequest = MintRequest.MintRequest;
@@ -43,6 +46,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
   private type Token = Token.Token;
   private type Auction = Auction.Auction;
   private type AuctionRequest = Auction.AuctionRequest;
+  private type Payee = Payee.Payee;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -55,13 +59,13 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
 
   let icrc2Buffer = 1000000000 * 1;
 
-  private stable var collectionOwner = _collectionCreator;
-  private stable var collectionCreator = _collectionCreator;
-  private stable let royalty = _royalty;
-  private stable let name = _name;
-  private stable let description = _description;
-  private stable let banner = _bannerImage;
-  private stable let profile = _profileImage;
+  private stable var collectionOwner = collectionRequest.collectionCreator;
+  private stable var collectionCreator = collectionRequest.collectionCreator;
+  private stable let royalty = collectionRequest.royalty;
+  private stable let name = collectionRequest.name;
+  private stable let description = collectionRequest.description;
+  private stable let banner = collectionRequest.bannerImage;
+  private stable let profile = collectionRequest.profileImage;
   private stable var isMinting = false;
 
   private stable var mintId : Nat32 = 1;
@@ -244,10 +248,10 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
     );
   };
 
-  public shared ({ caller }) func remove(_mintId : Nat32) : async () {
+  /*public shared ({ caller }) func remove(_mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
     await _remove(_mintId);
-  };
+  };*/
 
   //Call close mint to set the Owner to this canister and prevent additioanl minting
   public shared ({ caller }) func closeMint() : async () {
@@ -395,7 +399,7 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
         try {
           await _buy(offer);
         } catch (e) {
-          assert (false);
+          throw (e);
         };
         currentId;
       };
@@ -404,6 +408,74 @@ actor class Cig721(_collectionCreator : Principal, _royalty : Float, _name : Tex
       };
     };
   };
+
+  /*public shared ({ caller }) func bulkBuy(_mintIds : [Nat32]) : async [Nat32] {
+    var results : Buffer.Buffer<Nat32> = Buffer.fromArray([]);
+    var payees = HashMap.empty<Principal, HashMap.HashMap<Text,[Payee]>>();
+    for (_mintId in _mintIds.vals()) {
+      let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
+      let _owner = _getOwner(_mintId);
+      switch (offerRequest) {
+        case (?offerRequest) {
+          let isExpired = _isExpired(offerRequest.expiration);
+          assert (isExpired == false);
+          let currentId = offerId;
+          offerId := offerId + 1;
+          let offer = {
+            offerId = currentId;
+            mintId = offerRequest.mintId;
+            seller = _owner;
+            buyer = caller;
+            amount = offerRequest.amount;
+            token = offerRequest.token;
+            expiration = offerRequest.expiration;
+          };
+          let exist = HashMap.get(payees, offer.seller, pHash, pEqual);
+          switch (exist) {
+            case (?exist) {
+              let payee : Payee = {
+                to = offer.seller;
+                from = offer.buyer;
+                amount = offer.amount;
+                token = offer.token;
+                mintId = offer.mintId;
+              };
+              let _exist = Array.append(exist, [payee]);
+              payees := HashMap.insert(payees, offer.seller, pHash, pEqual, _exist).0;
+            };
+            case (null) {
+              let payee : Payee = {
+                to = offer.seller;
+                from = offer.buyer;
+                amount = offer.amount;
+                token = offer.token;
+                mintId = offer.mintId;
+              };
+              switch(offer.token){
+
+              }
+              var payees = HashMap.empty<Text,[Payee]>();
+              payees := HashMap.insert(payees, offer.seller, pHash, pEqual, [payee]).0;
+            };
+          };
+        };
+        case (null) {
+          throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
+        };
+      };
+    };
+
+    for((seller,payee) in HashMap.entries(payees)) {
+
+    };
+
+    try {
+      await _buy(offer);
+    } catch (e) {
+      //throw (e);
+    };
+    Buffer.toArray(results);
+  };*/
 
   public shared ({ caller }) func makeOffer(offerRequest : OfferRequest) : async Nat32 {
     await* _makeOffer(offerRequest, caller);
