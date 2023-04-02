@@ -370,6 +370,11 @@ actor class NFT_Registry(_owner : Principal) = this {
     await Modclub.getModclubActor(modclub_environment).submitHtmlContent(name, "<div><p>Please review <a href='"#href #"' target='_blank'>this NFT collection</a>.</p></div>", ?("" #name #" NFT Collection"));
   };
 
+  public func testSubmitContentToModclub(name:Text) : async Text {
+    let href = "https://wi732-4aaaa-aaaan-qc45a-cai.raw.ic0.app/";
+    await Modclub.getModclubActor(modclub_environment).submitHtmlContent(name, "<div><p>Please review <a href='"#href #"' target='_blank'>this NFT collection</a>.</p></div>", ?("" #name #" NFT Collection"));
+  };
+
   public shared ({ caller }) func setSubscribeCallback() : async () {
     assert (owner == caller);
     await Modclub.getModclubActor(modclub_environment).subscribe({
