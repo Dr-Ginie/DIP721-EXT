@@ -244,6 +244,11 @@ actor class NFT_Registry(_owner : Principal) = this {
     Principal.toText(Principal.fromActor(canister))
   };
 
+  public shared ({ caller }) func testRegisterCollection(collection : Collection) : async Text {
+    collections := HashMap.insert(collections, collection.name, tHash, tEqual, collection).0;
+    collection.name
+  };
+
   public shared ({ caller }) func registerCollection(collection : Collection) : async Text {
     assert (owner == caller);
     let _isRegistered = isRegistered(collection.name);
