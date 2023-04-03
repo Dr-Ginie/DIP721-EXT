@@ -60,3 +60,21 @@ window.createCollection = async function (request) {
     });
     return actor.createCollection(request)
 }
+
+window.setAttributes = async function (attributes) {
+    const actor = registry.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.setAttributes(attributes)
+}
+
+window.addLayer = async function (number,layer) {
+    const actor = registry.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.addLayer(number,layer)
+}
