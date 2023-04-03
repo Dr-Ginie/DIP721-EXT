@@ -71,6 +71,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable let banner = collectionRequest.bannerImage;
   private stable let profile = collectionRequest.profileImage;
   private stable var isMinting = false;
+  private stable var isWhiteListMinting = false;
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
@@ -86,6 +87,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
   private stable var layers = HashMap.empty<Nat32, [Layer]>();
   private stable var attributes : [Blob] = [];
+  private stable var whiteList : [Principal] = [];
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -128,6 +130,10 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   public query func getOwner(_mintId : Nat32) : async Principal {
     _getOwner(_mintId);
+  };
+
+  public query func fetchWhiteList() : async [Principal] {
+    whiteList
   };
 
   public query func fetchLayers() : async [[Layer]] {
@@ -286,14 +292,21 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   };
 
-  public shared ({ caller }) func startMint(duration : Nat) : async Nat {
+  public shared ({ caller }) func startMint(duration : Nat, whiteListDuration : Nat) : async Nat {
     assert (caller == collectionOwner);
     assert (isMinting == false);
-    isMinting := true;
+    assert (isWhiteListMinting == false);
+    isWhiteListMinting := true;
     setTimer(
-      #seconds(duration),
+      #seconds(whiteListDuration),
       func() : async () {
-        isMinting := false;
+        isMinting := true;
+        ignore setTimer(
+          #seconds(duration),
+          func() : async () {
+            isMinting := false;
+          },
+        );
       },
     );
   };
@@ -321,6 +334,18 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     currentId;
   };*/
 
+  public shared ({caller}) func addToWhiteList(value:Principal): async [Principal] {
+    whiteList := Array.append(whiteList,[value]);
+    whiteList
+  };
+
+  public shared ({caller}) func removeFromWhiteList(value:Principal): async [Principal] {
+    whiteList := Array.filter(whiteList,func (e:Principal):Bool {
+      e != value;
+    });
+    whiteList
+  };
+
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
     assert (isMinting == false);
     let currentId = mintId;
@@ -334,8 +359,40 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     currentId;
   };
 
+  public shared ({ caller }) func whiteListMint(request : MintRequest) : async Nat32 {
+    assert (isWhiteListMinting == false);
+    assert(_isWhiteList(caller));
+    let currentId = mintId;
+    mintId := mintId + 1;
+    let _metadata : Metadata = {
+      mintId = currentId;
+      data = request.data;
+    };
+    _mint(_metadata, request.owner);
+    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+    currentId;
+  };
+
   public shared ({ caller }) func bulkMint(requests : [MintRequest]) : async [Nat32] {
     assert (isMinting == false);
+    var result : [Nat32] = [];
+    for (request in requests.vals()) {
+      let currentId = mintId;
+      mintId := mintId + 1;
+      let _metadata : Metadata = {
+        mintId = currentId;
+        data = request.data;
+      };
+      _mint(_metadata, request.owner);
+      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+      result := Array.append(result, [currentId]);
+    };
+    result;
+  };
+
+  public shared ({ caller }) func whiteListbulkMint(requests : [MintRequest]) : async [Nat32] {
+    assert (isWhiteListMinting == false);
+    assert(_isWhiteList(caller));
     var result : [Nat32] = [];
     for (request in requests.vals()) {
       let currentId = mintId;
@@ -1183,4 +1240,12 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
     };
   };
+
+  private func _isWhiteList(caller:Principal): Bool {
+    let exist = Array.find(whiteList,func (e:Principal):Bool { caller == e});
+    switch(exist) {
+      case(?exist) true;
+      case(null) false;
+    };
+  }
 };
