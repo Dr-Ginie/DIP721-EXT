@@ -80,6 +80,8 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
   private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
+  private stable var layers = HashMap.empty<Nat32, [Blob]>();
+  private stable var attributes:[Blob] = [];
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -122,6 +124,28 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
 
   public query func getOwner(_mintId : Nat32) : async Principal {
     _getOwner(_mintId);
+  };
+
+  public query func fetchLayers() : async [[Blob]] {
+    var _layers:[[Blob]] = [];
+    for((number,layer) in HashMap.entries(layers)){
+      _layers := Array.append(_layers,[layer]);
+    };
+    _layers
+  };
+
+  public query func getLayer(number : Nat32) : async [Blob] {
+    let exist = HashMap.get(layers, number, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        exist;
+      };
+      case (null) { [] };
+    };
+  };
+
+  public query func fetchAttributes() : async [Blob] {
+    attributes
   };
 
   public query func fetchOffers(_mintId : Nat32) : async [Offer] {
@@ -235,6 +259,28 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
   };
 
   //Update Methods
+
+  public shared ({ caller }) func setAttributes(_attributes : [Blob]) : async () {
+    assert (caller == collectionOwner);
+    assert (isMinting == false);
+    attributes := _attributes;
+  };
+
+  public shared ({ caller }) func addLayer(number:Nat32,layer : [Blob]) : async () {
+    assert (caller == collectionOwner);
+    assert (isMinting == false);
+    let exist = HashMap.get(layers, number, n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        let _layer = Array.append(exist,layer);
+        layers := HashMap.insert(layers, number, n32Hash, n32Equal,_layer).0
+      };
+      case (null) {
+        layers := HashMap.insert(layers, number, n32Hash, n32Equal,layer).0
+      };
+    };
+    
+  };
 
   public shared ({ caller }) func startMint(duration : Nat) : async Nat {
     assert (caller == collectionOwner);
