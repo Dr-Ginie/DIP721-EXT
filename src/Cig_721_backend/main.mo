@@ -32,10 +32,12 @@ import Token "./models/Token";
 import Payee "./models/Payee";
 import Auction "./models/Auction";
 import CollectionRequest "./models/CollectionRequest";
+import Http "./common/http";
+import Layer "./models/Layer";
 
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
-actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this {
+actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = this {
 
   private type Metadata = Metadata.Metadata;
   private type MintRequest = MintRequest.MintRequest;
@@ -47,6 +49,8 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
   private type Auction = Auction.Auction;
   private type AuctionRequest = Auction.AuctionRequest;
   private type Payee = Payee.Payee;
+  private type JSON = JSON.JSON;
+  private type Layer = Layer.Layer;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -80,8 +84,8 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
   private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
-  private stable var layers = HashMap.empty<Nat32, [Blob]>();
-  private stable var attributes:[Blob] = [];
+  private stable var layers = HashMap.empty<Nat32, [Layer]>();
+  private stable var attributes : [Blob] = [];
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -126,15 +130,15 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
     _getOwner(_mintId);
   };
 
-  public query func fetchLayers() : async [[Blob]] {
-    var _layers:[[Blob]] = [];
-    for((number,layer) in HashMap.entries(layers)){
-      _layers := Array.append(_layers,[layer]);
+  public query func fetchLayers() : async [[Layer]] {
+    var _layers : [[Layer]] = [];
+    for ((number, layer) in HashMap.entries(layers)) {
+      _layers := Array.append(_layers, [layer]);
     };
-    _layers
+    _layers;
   };
 
-  public query func getLayer(number : Nat32) : async [Blob] {
+  public query func getLayer(number : Nat32) : async [Layer] {
     let exist = HashMap.get(layers, number, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
@@ -145,7 +149,7 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
   };
 
   public query func fetchAttributes() : async [Blob] {
-    attributes
+    attributes;
   };
 
   public query func fetchOffers(_mintId : Nat32) : async [Offer] {
@@ -266,20 +270,20 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
     attributes := _attributes;
   };
 
-  public shared ({ caller }) func addLayer(number:Nat32,layer : [Blob]) : async () {
+  public shared ({ caller }) func addLayer(number : Nat32, layer : [Layer]) : async () {
     assert (caller == collectionOwner);
     assert (isMinting == false);
     let exist = HashMap.get(layers, number, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
-        let _layer = Array.append(exist,layer);
-        layers := HashMap.insert(layers, number, n32Hash, n32Equal,_layer).0
+        let _layer = Array.append(exist, layer);
+        layers := HashMap.insert(layers, number, n32Hash, n32Equal, _layer).0;
       };
       case (null) {
-        layers := HashMap.insert(layers, number, n32Hash, n32Equal,layer).0
+        layers := HashMap.insert(layers, number, n32Hash, n32Equal, layer).0;
       };
     };
-    
+
   };
 
   public shared ({ caller }) func startMint(duration : Nat) : async Nat {
@@ -499,7 +503,7 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
               };
               switch(offer.token){
 
-              }
+              };
               var payees = HashMap.empty<Text,[Payee]>();
               payees := HashMap.insert(payees, offer.seller, pHash, pEqual, [payee]).0;
             };
@@ -545,6 +549,109 @@ actor class Cig721(collectionRequest:CollectionRequest.CollectionRequest) = this
       };
     };
     _offerId;
+  };
+
+  public query func http_request(request : Http.Request) : async Http.Response {
+    let path = Iter.toArray(Text.tokens(request.url, #text("/")));
+    if (path.size() == 1) {
+      switch (path[0]) {
+        case (_) return return Http.BAD_REQUEST();
+      };
+    } else if (path.size() == 2) {
+      switch (path[0]) {
+        case ("metadata") return _metadataResponse(path[1]);
+        case (_) return return Http.BAD_REQUEST();
+      };
+    } else if (path.size() == 3) {
+      switch (path[0]) {
+        case ("layer") return _layerResponse(path[1], path[2]);
+        case (_) return return Http.BAD_REQUEST();
+      };
+    } else {
+      return Http.BAD_REQUEST();
+    };
+  };
+
+  private func _natResponse(value : Nat) : Http.Response {
+    let json = #Number(value);
+    let blob = Text.encodeUtf8(JSON.show(json));
+    let response : Http.Response = {
+      status_code = 200;
+      headers = [("Content-Type", "application/json")];
+      body = blob;
+      streaming_strategy = null;
+    };
+  };
+
+  private func _blobResponse(blob : Blob) : Http.Response {
+    let response : Http.Response = {
+      status_code = 200;
+      headers = [("Content-Type", "application/json")];
+      body = blob;
+      streaming_strategy = null;
+    };
+  };
+
+  private func _layerResponse(number : Text, index : Text) : Http.Response {
+    let _index = Utils.textToNat(index);
+    let _number = Utils.textToNat(number);
+    let exist = HashMap.get(layers, Nat32.fromNat(_number), n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        if (exist.size() > _index) {
+          let response : Http.Response = {
+            status_code = 200;
+            headers = [("Content-Type", exist[_index].contentType)];
+            body = exist[_index].value;
+            streaming_strategy = null;
+          };
+        } else {
+          return Http.BAD_REQUEST();
+        };
+      };
+      case (null) {
+        return Http.BAD_REQUEST();
+      };
+    };
+  };
+
+  private func _metadataResponse(value : Text) : Http.Response {
+    let exist = HashMap.get(metaData, Utils.textToNat32(value), n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        let response : Http.Response = {
+          status_code = 200;
+          headers = [("Content-Type", "application/json")];
+          body = exist.data;
+          streaming_strategy = null;
+        };
+      };
+      case (null) {
+        return Http.BAD_REQUEST();
+      };
+    };
+  };
+
+  private func _textResponse(value : Text) : Http.Response {
+    let json = #String(value);
+    let blob = Text.encodeUtf8(JSON.show(json));
+    let response : Http.Response = {
+      status_code = 200;
+      headers = [("Content-Type", "application/json")];
+      body = blob;
+      streaming_strategy = null;
+    };
+  };
+
+  private func _jsonResponse(value : [(Text, JSON)]) : Http.Response {
+    let json = #Object(value);
+    let blob = Text.encodeUtf8(JSON.show(json));
+    let response : Http.Response = {
+      status_code = 200;
+      headers = [("Content-Type", "application/json")];
+      body = blob;
+      streaming_strategy = null;
+    };
   };
 
   ///Private Methods
