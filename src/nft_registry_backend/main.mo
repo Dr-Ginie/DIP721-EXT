@@ -23,7 +23,7 @@ import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 import Ad "models/Ad";
 import Collection "models/Collection";
 import Dip20 "Dip20";
-import Constants "Constants";
+import Constants "../Constants";
 import Modclub "modclub";
 import Cig721 "../Cig_721_backend/main";
 import CollectionRequest "../Cig_721_backend/models/CollectionRequest";

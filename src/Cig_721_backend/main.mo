@@ -35,7 +35,7 @@ import CollectionRequest "./models/CollectionRequest";
 import Http "./common/http";
 import Attribute "./models/Attribute";
 import WhiteList "./models/WhiteList";
-
+import Constants "../Constants";
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
 actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = this {
@@ -69,7 +69,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var collectionCreator = collectionRequest.collectionCreator;
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
-  private stable var mintPrice:Nat = 0;
+  private stable var mintPrice = 0;
   private stable let description = collectionRequest.description;
   private stable let banner = collectionRequest.bannerImage;
   private stable let profile = collectionRequest.profileImage;
@@ -379,14 +379,24 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     value;
   };
 
-  public shared ({ caller }) func setMintPrice(value:Nat) : async () {
-    assert(caller == collectionOwner);
-    assert(value >= 0);
+  public shared ({ caller }) func setMintPrice(value : Nat) : async () {
+    assert (caller == collectionOwner);
+    assert (value >= 0);
     mintPrice := value;
   };
 
-  public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
+  public shared ({ caller }) func mint(request : MintRequest, recipient : Principal) : async Nat32 {
+    let tempOffer : Offer = {
+      offerId = 0;
+      mintId = 0;
+      seller = Principal.fromActor(this);
+      buyer = recipient;
+      amount = mintPrice;
+      token = #Dip20(Constants.WICP_Canister);
+      expiration = null;
+    };
     if (isMinting == true) {
+      await _tokenTransferFrom(tempOffer);
       let currentId = mintId;
       mintId := mintId + 1;
       let _metadata : Metadata = {
@@ -397,6 +407,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
       currentId;
     } else if (isWhiteListMinting == true) {
+      await _tokenTransferFrom(tempOffer);
       _whiteListMint(caller, request);
     } else {
       throw (Error.reject("UNAUTHORIZED"));
@@ -404,7 +415,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   private func _whiteListMint(caller : Principal, request : MintRequest) : Nat32 {
-    assert (isWhiteListMinting == false);
     assert (_isWhiteList(caller));
     let currentId = mintId;
     mintId := mintId + 1;
@@ -417,8 +427,18 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     currentId;
   };
 
-  public shared ({ caller }) func bulkMint(requests : [MintRequest]) : async [Nat32] {
+  public shared ({ caller }) func bulkMint(requests : [MintRequest], recipient : Principal) : async [Nat32] {
+    let tempOffer : Offer = {
+      offerId = 0;
+      mintId = 0;
+      seller = Principal.fromActor(this);
+      buyer = recipient;
+      amount = mintPrice * requests.size();
+      token = #Dip20(Constants.WICP_Canister);
+      expiration = null;
+    };
     if (isMinting == false) {
+      await _tokenTransferFrom(tempOffer);
       var result : [Nat32] = [];
       for (request in requests.vals()) {
         let currentId = mintId;
@@ -433,14 +453,14 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
       result;
     } else if (isWhiteListMinting == false) {
-      _whiteListbulkMint(caller,requests)
+      await _tokenTransferFrom(tempOffer);
+      _whiteListbulkMint(caller, requests);
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
   };
 
-  private func _whiteListbulkMint(caller:Principal,requests : [MintRequest]) : [Nat32] {
-    assert (isWhiteListMinting == false);
+  private func _whiteListbulkMint(caller : Principal, requests : [MintRequest]) : [Nat32] {
     assert (_isWhiteList(caller));
     var result : [Nat32] = [];
     for (request in requests.vals()) {
