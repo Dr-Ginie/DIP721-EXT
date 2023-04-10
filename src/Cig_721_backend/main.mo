@@ -33,7 +33,7 @@ import Payee "./models/Payee";
 import Auction "./models/Auction";
 import CollectionRequest "./models/CollectionRequest";
 import Http "./common/http";
-import Layer "./models/Layer";
+import Attribute "./models/Attribute";
 
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
@@ -50,7 +50,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type AuctionRequest = Auction.AuctionRequest;
   private type Payee = Payee.Payee;
   private type JSON = JSON.JSON;
-  private type Layer = Layer.Layer;
+  private type Attribute = Attribute.Attribute;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -85,8 +85,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
   private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
-  private stable var layers = HashMap.empty<Nat32, [Layer]>();
-  private stable var attributes : [Blob] = [];
+  private stable var attributes = HashMap.empty<Nat32, [Attribute]>();
   private stable var whiteList : [Principal] = [];
 
   ///Query Methods
@@ -133,29 +132,25 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   public query func fetchWhiteList() : async [Principal] {
-    whiteList
+    whiteList;
   };
 
-  public query func fetchLayers() : async [[Layer]] {
-    var _layers : [[Layer]] = [];
-    for ((number, layer) in HashMap.entries(layers)) {
-      _layers := Array.append(_layers, [layer]);
+  public query func fetchAttributes() : async [[Attribute]] {
+    var _attributes : [[Attribute]] = [];
+    for ((number, attribute) in HashMap.entries(attributes)) {
+      _attributes := Array.append(_attributes, [attribute]);
     };
-    _layers;
+    _attributes;
   };
 
-  public query func getLayer(number : Nat32) : async [Layer] {
-    let exist = HashMap.get(layers, number, n32Hash, n32Equal);
+  public query func getAttribute(number : Nat32) : async [Attribute] {
+    let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
         exist;
       };
       case (null) { [] };
     };
-  };
-
-  public query func fetchAttributes() : async [Blob] {
-    attributes;
   };
 
   public query func fetchOffers(_mintId : Nat32) : async [Offer] {
@@ -269,24 +264,33 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   //Update Methods
-
-  public shared ({ caller }) func setAttributes(_attributes : [Blob]) : async () {
+  public shared ({ caller }) func removeAttribute(number : Nat32) : async () {
     assert (caller == collectionOwner);
     assert (isMinting == false);
-    attributes := _attributes;
+    assert (isWhiteListMinting == false);
+    var _number : Nat32 = 1;
+    let tempAttributes = HashMap.remove(attributes, number, n32Hash, n32Equal).0;
+    var newAttributes = HashMap.empty<Nat32, [Attribute]>();
+    for ((key, attribute) in HashMap.entries(tempAttributes)) {
+      newAttributes := HashMap.insert(newAttributes, _number, n32Hash, n32Equal, attribute).0;
+      _number := _number + 1;
+
+    };
+    attributes := newAttributes;
   };
 
-  public shared ({ caller }) func addLayer(number : Nat32, layer : [Layer]) : async () {
+  public shared ({ caller }) func addAttribute(number : Nat32, attribute : [Attribute]) : async () {
     assert (caller == collectionOwner);
     assert (isMinting == false);
-    let exist = HashMap.get(layers, number, n32Hash, n32Equal);
+    assert (isWhiteListMinting == false);
+    let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
-        let _layer = Array.append(exist, layer);
-        layers := HashMap.insert(layers, number, n32Hash, n32Equal, _layer).0;
+        let _attribute = Array.append(exist, attribute);
+        attributes := HashMap.insert(attributes, number, n32Hash, n32Equal, _attribute).0;
       };
       case (null) {
-        layers := HashMap.insert(layers, number, n32Hash, n32Equal, layer).0;
+        attributes := HashMap.insert(attributes, number, n32Hash, n32Equal, attribute).0;
       };
     };
 
@@ -334,16 +338,19 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     currentId;
   };*/
 
-  public shared ({caller}) func addToWhiteList(value:Principal): async [Principal] {
-    whiteList := Array.append(whiteList,[value]);
-    whiteList
+  public shared ({ caller }) func addToWhiteList(values : [Principal]) : async [Principal] {
+    whiteList := Array.append(whiteList, values);
+    whiteList;
   };
 
-  public shared ({caller}) func removeFromWhiteList(value:Principal): async [Principal] {
-    whiteList := Array.filter(whiteList,func (e:Principal):Bool {
-      e != value;
-    });
-    whiteList
+  public shared ({ caller }) func removeFromWhiteList(value : Principal) : async [Principal] {
+    whiteList := Array.filter(
+      whiteList,
+      func(e : Principal) : Bool {
+        e != value;
+      },
+    );
+    whiteList;
   };
 
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
@@ -361,7 +368,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   public shared ({ caller }) func whiteListMint(request : MintRequest) : async Nat32 {
     assert (isWhiteListMinting == false);
-    assert(_isWhiteList(caller));
+    assert (_isWhiteList(caller));
     let currentId = mintId;
     mintId := mintId + 1;
     let _metadata : Metadata = {
@@ -392,7 +399,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   public shared ({ caller }) func whiteListbulkMint(requests : [MintRequest]) : async [Nat32] {
     assert (isWhiteListMinting == false);
-    assert(_isWhiteList(caller));
+    assert (_isWhiteList(caller));
     var result : [Nat32] = [];
     for (request in requests.vals()) {
       let currentId = mintId;
@@ -652,18 +659,25 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private func _layerResponse(number : Text, index : Text) : Http.Response {
     let _index = Utils.textToNat(index);
     let _number = Utils.textToNat(number);
-    let exist = HashMap.get(layers, Nat32.fromNat(_number), n32Hash, n32Equal);
+    let exist = HashMap.get(attributes, Nat32.fromNat(_number), n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
-        if (exist.size() > _index) {
-          let response : Http.Response = {
-            status_code = 200;
-            headers = [("Content-Type", exist[_index].contentType)];
-            body = exist[_index].value;
-            streaming_strategy = null;
+        switch (exist[_index].layer) {
+          case (?layer) {
+            if (exist.size() > _index) {
+              let response : Http.Response = {
+                status_code = 200;
+                headers = [("Content-Type", layer.contentType)];
+                body = layer.value;
+                streaming_strategy = null;
+              };
+            } else {
+              return Http.BAD_REQUEST();
+            };
           };
-        } else {
-          return Http.BAD_REQUEST();
+          case (null) {
+            return Http.NOT_FOUND();
+          };
         };
       };
       case (null) {
@@ -1241,11 +1255,11 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _isWhiteList(caller:Principal): Bool {
-    let exist = Array.find(whiteList,func (e:Principal):Bool { caller == e});
-    switch(exist) {
-      case(?exist) true;
-      case(null) false;
+  private func _isWhiteList(caller : Principal) : Bool {
+    let exist = Array.find(whiteList, func(e : Principal) : Bool { caller == e });
+    switch (exist) {
+      case (?exist) true;
+      case (null) false;
     };
-  }
+  };
 };

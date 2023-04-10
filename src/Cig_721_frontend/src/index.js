@@ -3,6 +3,8 @@ import { AuthClient } from "@dfinity/auth-client";
 //import { renderLoggedIn } from "./views/loggedIn";
 import nft from "../../declarations/Cig_721_backend";
 import registry from "../../declarations/nft_registry_backend";
+import mergeImages from 'merge-images';
+
 
 var identity
 
@@ -43,6 +45,15 @@ window.mint = async function (mintRequest) {
     return actor.mint(mintRequest)
 }
 
+window.whiteListMint = async function (mintRequest) {
+    const actor = nft.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.whiteListMint(mintRequest)
+}
+
 window.bulkMint = async function (mintRequests) {
     const actor = nft.createActor(nft.canisterId, {
         agentOptions: {
@@ -50,6 +61,15 @@ window.bulkMint = async function (mintRequests) {
         },
     });
     return actor.bulkMint(mintRequests)
+}
+
+window.whiteListbulkMint = async function (mintRequests) {
+    const actor = nft.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.whiteListbulkMint(mintRequests)
 }
 
 window.createCollection = async function (request) {
@@ -78,6 +98,35 @@ window.addLayer = async function (number,layer) {
     });
     return actor.addLayer(number,layer)
 }
+
+window.removeLayer = async function (number) {
+    const actor = registry.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.removeLayer(number)
+}
+
+window.addToWhiteList = async function (principals) {
+    const actor = registry.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.addToWhiteList(principals)
+}
+
+window.removeFromWhiteList = async function (principal) {
+    const actor = registry.createActor(nft.canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.removeFromWhiteList(principal)
+}
+
+//const base64Image = await mergeImages(['/body.png', '/eyes.png', '/mouth.png'])
 
 const colors = [{ value: "red", weight: 100 }, { value: "blue", weight: 100 }, { value: "yellow", weight: 100 }];
 const directions = [{ value: "up", weight: 100 }, { value: "down", weight: 100 }, { value: "left", weight: 100 }, { value: "right", weight: 100 }];
@@ -163,5 +212,3 @@ const startCreating = async () => {
     console.log(dnaList.length);
     console.log(dnaList);
 };
-
-startCreating()
