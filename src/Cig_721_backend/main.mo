@@ -34,6 +34,7 @@ import Auction "./models/Auction";
 import CollectionRequest "./models/CollectionRequest";
 import Http "./common/http";
 import Attribute "./models/Attribute";
+import WhiteList "./models/WhiteList";
 
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 
@@ -51,6 +52,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type Payee = Payee.Payee;
   private type JSON = JSON.JSON;
   private type Attribute = Attribute.Attribute;
+  private type WhiteList = WhiteList.WhiteList;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -67,6 +69,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var collectionCreator = collectionRequest.collectionCreator;
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
+  private stable var mintPrice:Nat = 0;
   private stable let description = collectionRequest.description;
   private stable let banner = collectionRequest.bannerImage;
   private stable let profile = collectionRequest.profileImage;
@@ -86,7 +89,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
   private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
   private stable var attributes = HashMap.empty<Nat32, [Attribute]>();
-  private stable var whiteList : [Principal] = [];
+  private stable var whiteList : [WhiteList] = [];
+  private stable var currentWhiteList : ?WhiteList = null;
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -131,8 +135,19 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     _getOwner(_mintId);
   };
 
-  public query func fetchWhiteList() : async [Principal] {
+  public query func fetchWhiteList() : async [WhiteList] {
     whiteList;
+  };
+
+  public query func getCurrentWhiteList() : async WhiteList {
+    switch (currentWhiteList) {
+      case (?currentWhiteList) {
+        currentWhiteList;
+      };
+      case (null) {
+        throw (Error.reject("Not Found"));
+      };
+    };
   };
 
   public query func fetchAttributes() : async [[Attribute]] {
@@ -296,23 +311,40 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   };
 
-  public shared ({ caller }) func startMint(duration : Nat, whiteListDuration : Nat) : async Nat {
+  public shared ({ caller }) func startMint(duration : Nat) : async () {
     assert (caller == collectionOwner);
     assert (isMinting == false);
     assert (isWhiteListMinting == false);
     isWhiteListMinting := true;
-    setTimer(
-      #seconds(whiteListDuration),
-      func() : async () {
+    await _startWhiteListMinting(duration);
+  };
+
+  private func _startWhiteListMinting(duration : Nat) : async () {
+    var _whiteList = List.fromArray(whiteList);
+    let pop = List.pop(_whiteList);
+    currentWhiteList := pop.0;
+    whiteList := List.toArray(pop.1);
+    switch (currentWhiteList) {
+      case (?currentWhiteList) {
+        ignore setTimer(
+          #seconds(currentWhiteList.duration),
+          func() : async () {
+            await _startWhiteListMinting(duration);
+          },
+        );
+      };
+      case (null) {
         isMinting := true;
+        isWhiteListMinting := false;
         ignore setTimer(
           #seconds(duration),
           func() : async () {
             isMinting := false;
+            _closeMint();
           },
         );
-      },
-    );
+      };
+    };
   };
 
   /*public shared ({ caller }) func remove(_mintId : Nat32) : async () {
@@ -322,6 +354,10 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   //Call close mint to set the Owner to this canister and prevent additioanl minting
   public shared ({ caller }) func closeMint() : async () {
+    _closeMint();
+  };
+
+  private func _closeMint() {
     collectionOwner := Principal.fromActor(this);
   };
 
@@ -338,35 +374,36 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     currentId;
   };*/
 
-  public shared ({ caller }) func addToWhiteList(values : [Principal]) : async [Principal] {
-    whiteList := Array.append(whiteList, values);
-    whiteList;
+  public shared ({ caller }) func addWhiteList(value : WhiteList) : async WhiteList {
+    whiteList := Array.append(whiteList, [value]);
+    value;
   };
 
-  public shared ({ caller }) func removeFromWhiteList(value : Principal) : async [Principal] {
-    whiteList := Array.filter(
-      whiteList,
-      func(e : Principal) : Bool {
-        e != value;
-      },
-    );
-    whiteList;
+  public shared ({ caller }) func setMintPrice(value:Nat) : async () {
+    assert(caller == collectionOwner);
+    assert(value >= 0);
+    mintPrice := value;
   };
 
   public shared ({ caller }) func mint(request : MintRequest) : async Nat32 {
-    assert (isMinting == false);
-    let currentId = mintId;
-    mintId := mintId + 1;
-    let _metadata : Metadata = {
-      mintId = currentId;
-      data = request.data;
+    if (isMinting == true) {
+      let currentId = mintId;
+      mintId := mintId + 1;
+      let _metadata : Metadata = {
+        mintId = currentId;
+        data = request.data;
+      };
+      _mint(_metadata, request.owner);
+      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+      currentId;
+    } else if (isWhiteListMinting == true) {
+      _whiteListMint(caller, request);
+    } else {
+      throw (Error.reject("UNAUTHORIZED"));
     };
-    _mint(_metadata, request.owner);
-    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-    currentId;
   };
 
-  public shared ({ caller }) func whiteListMint(request : MintRequest) : async Nat32 {
+  private func _whiteListMint(caller : Principal, request : MintRequest) : Nat32 {
     assert (isWhiteListMinting == false);
     assert (_isWhiteList(caller));
     let currentId = mintId;
@@ -381,23 +418,28 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   public shared ({ caller }) func bulkMint(requests : [MintRequest]) : async [Nat32] {
-    assert (isMinting == false);
-    var result : [Nat32] = [];
-    for (request in requests.vals()) {
-      let currentId = mintId;
-      mintId := mintId + 1;
-      let _metadata : Metadata = {
-        mintId = currentId;
-        data = request.data;
+    if (isMinting == false) {
+      var result : [Nat32] = [];
+      for (request in requests.vals()) {
+        let currentId = mintId;
+        mintId := mintId + 1;
+        let _metadata : Metadata = {
+          mintId = currentId;
+          data = request.data;
+        };
+        _mint(_metadata, request.owner);
+        manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+        result := Array.append(result, [currentId]);
       };
-      _mint(_metadata, request.owner);
-      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-      result := Array.append(result, [currentId]);
+      result;
+    } else if (isWhiteListMinting == false) {
+      _whiteListbulkMint(caller,requests)
+    } else {
+      throw (Error.reject("UNAUTHORIZED"));
     };
-    result;
   };
 
-  public shared ({ caller }) func whiteListbulkMint(requests : [MintRequest]) : async [Nat32] {
+  private func _whiteListbulkMint(caller:Principal,requests : [MintRequest]) : [Nat32] {
     assert (isWhiteListMinting == false);
     assert (_isWhiteList(caller));
     var result : [Nat32] = [];
@@ -1256,10 +1298,17 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   private func _isWhiteList(caller : Principal) : Bool {
-    let exist = Array.find(whiteList, func(e : Principal) : Bool { caller == e });
-    switch (exist) {
-      case (?exist) true;
-      case (null) false;
+    switch (currentWhiteList) {
+      case (?currentWhiteList) {
+        let exist = Array.find(currentWhiteList.value, func(e : Principal) : Bool { caller == e });
+        switch (exist) {
+          case (?exist) true;
+          case (null) false;
+        };
+      };
+      case (null) {
+        false;
+      };
     };
   };
 };
