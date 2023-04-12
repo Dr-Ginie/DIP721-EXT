@@ -10,7 +10,9 @@ var identity
 window.auth = async function (provider) {
     const authClient = await AuthClient.create();
     let isAuth = await authClient.isAuthenticated()
+
     if (isAuth) {
+        identity = await authClient.getIdentity();
         return identity.getPrincipal().toString();
     } else {
         const days = BigInt(1);
