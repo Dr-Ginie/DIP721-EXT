@@ -60,6 +60,24 @@ window.bulkMint = async function (canisterId, count, recipent) {
     return actor.bulkMint(count, recipent)
 }
 
+window.addWhiteList = async function (canisterId, whiteList) {
+    const actor = nft.createActor(canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.addWhiteList(whiteList)
+}
+
+window.setMintPrice = async function (canisterId, value) {
+    const actor = nft.createActor(canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.setMintPrice(value)
+}
+
 window.createCollection = async function (canisterId, request) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {

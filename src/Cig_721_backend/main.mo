@@ -282,7 +282,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     count;
   };
 
-  //Update Methods
+  //////////Update Methods///////////
   public shared ({ caller }) func removeAttribute(number : Nat32) : async () {
     assert (caller == collectionOwner);
     assert (isMinting == false);
@@ -322,61 +322,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     isWhiteListMinting := true;
     await _startWhiteListMinting(duration);
   };
-
-  private func _startWhiteListMinting(duration : Nat) : async () {
-    var _whiteList = List.fromArray(whiteList);
-    let pop = List.pop(_whiteList);
-    currentWhiteList := pop.0;
-    whiteList := List.toArray(pop.1);
-    switch (currentWhiteList) {
-      case (?currentWhiteList) {
-        ignore setTimer(
-          #seconds(currentWhiteList.duration),
-          func() : async () {
-            await _startWhiteListMinting(duration);
-          },
-        );
-      };
-      case (null) {
-        isMinting := true;
-        isWhiteListMinting := false;
-        ignore setTimer(
-          #seconds(duration),
-          func() : async () {
-            isMinting := false;
-            _closeMint();
-          },
-        );
-      };
-    };
-  };
-
-  /*public shared ({ caller }) func remove(_mintId : Nat32) : async () {
-    assert (_isOwner(caller, _mintId));
-    await _remove(_mintId);
-  };*/
-
-  //Call close mint to set the Owner to this canister and prevent additioanl minting
-  public shared ({ caller }) func closeMint() : async () {
-    _closeMint();
-  };
-
-  private func _closeMint() {
-    collectionOwner := Principal.fromActor(this);
-  };
-
-  /*public shared ({ caller }) func testMint() : async Nat32 {
-    assert (caller == collectionOwner);
-    let currentId = mintId;
-    mintId := mintId + 1;
-    let _metadata : Metadata = {
-      mintId = currentId;
-      data = Text.encodeUtf8("boomStick");
-    };
-    _mint(_metadata, Principal.fromText("j26ec-ix7zw-kiwcx-ixw6w-72irq-zsbyr-4t7fk-alils-u33an-kh6rk-7qe"));
-    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-    currentId;
-  };*/
 
   public shared ({ caller }) func addWhiteList(value : WhiteList) : async WhiteList {
     whiteList := Array.append(whiteList, [value]);
@@ -422,19 +367,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
-    assert (_isWhiteList(caller));
-    let currentId = mintId;
-    mintId := mintId + 1;
-    let _metadata : Metadata = {
-      mintId = currentId;
-      data = await _composeImage();
-    };
-    _mint(_metadata, recipient);
-    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-    currentId;
-  };
-
   public shared ({ caller }) func bulkMint(count : Nat32, recipient : Principal) : async [Nat32] {
     let tempOffer : Offer = {
       offerId = 0;
@@ -466,23 +398,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
-  };
-
-  private func _whiteListbulkMint(caller : Principal, count:Nat32, recipient : Principal) : async [Nat32] {
-    assert (_isWhiteList(caller));
-    var result : [Nat32] = [];
-    for (j in Iter.range(0, Nat32.toNat(count))) {
-      let currentId = mintId;
-      mintId := mintId + 1;
-      let _metadata : Metadata = {
-        mintId = currentId;
-        data = await _composeImage();
-      };
-      _mint(_metadata, recipient);
-      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-      result := Array.append(result, [currentId]);
-    };
-    result;
   };
 
   public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
@@ -704,6 +619,69 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     } else {
       return Http.BAD_REQUEST();
     };
+  };
+
+  //////////PRIVATE METHODS/////////////////////
+  private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
+    assert (_isWhiteList(caller));
+    let currentId = mintId;
+    mintId := mintId + 1;
+    let _metadata : Metadata = {
+      mintId = currentId;
+      data = await _composeImage();
+    };
+    _mint(_metadata, recipient);
+    manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+    currentId;
+  };
+
+  private func _whiteListbulkMint(caller : Principal, count : Nat32, recipient : Principal) : async [Nat32] {
+    assert (_isWhiteList(caller));
+    var result : [Nat32] = [];
+    for (j in Iter.range(0, Nat32.toNat(count))) {
+      let currentId = mintId;
+      mintId := mintId + 1;
+      let _metadata : Metadata = {
+        mintId = currentId;
+        data = await _composeImage();
+      };
+      _mint(_metadata, recipient);
+      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+      result := Array.append(result, [currentId]);
+    };
+    result;
+  };
+
+  private func _startWhiteListMinting(duration : Nat) : async () {
+    var _whiteList = List.fromArray(whiteList);
+    let pop = List.pop(_whiteList);
+    currentWhiteList := pop.0;
+    whiteList := List.toArray(pop.1);
+    switch (currentWhiteList) {
+      case (?currentWhiteList) {
+        ignore setTimer(
+          #seconds(currentWhiteList.duration),
+          func() : async () {
+            await _startWhiteListMinting(duration);
+          },
+        );
+      };
+      case (null) {
+        isMinting := true;
+        isWhiteListMinting := false;
+        ignore setTimer(
+          #seconds(duration),
+          func() : async () {
+            isMinting := false;
+            _closeMint();
+          },
+        );
+      };
+    };
+  };
+
+  private func _closeMint() {
+    collectionOwner := Principal.fromActor(this);
   };
 
   private func _natResponse(value : Nat) : Http.Response {
@@ -1341,7 +1319,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   private func _roll() : async [Attribute] {
-    var results : Buffer.Buffer<Attribute> = Buffer.fromArray([]); 
+    var results : Buffer.Buffer<Attribute> = Buffer.fromArray([]);
     for ((key, _attributes) in HashMap.entries(attributes)) {
       let result = await _pickWeighted(_attributes);
       results.add(result);
