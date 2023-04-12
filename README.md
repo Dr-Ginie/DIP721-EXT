@@ -2,7 +2,7 @@
 **deploy commands**
 DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Cig_721_backend --argument '(record {
         collectionCreator = principal "qtkcs-s2ah4-2525z-isucu-pkb3c-gdhke-pp2l2-xt5ye-ttcin-3weru-xqe";
-        royalty = float 2.0;
+        royalty = 2.0;
         name = "Collection name";
         description = "a colelction of 10000 hungry rats";
         bannerImage = blob  "0xdfgdfdsdfsdf";

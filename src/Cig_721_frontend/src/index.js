@@ -36,8 +36,8 @@ window.getPrincipal = function () {
     return identity.getPrincipal().toString();
 }
 
-window.mint = async function (mintRequest) {
-    const actor = nft.createActor(nft.canisterId, {
+window.mint = async function (canisterId,mintRequest) {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -45,8 +45,8 @@ window.mint = async function (mintRequest) {
     return actor.mint(mintRequest)
 }
 
-window.whiteListMint = async function (mintRequest) {
-    const actor = nft.createActor(nft.canisterId, {
+window.whiteListMint = async function (canisterId,mintRequest) {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -54,8 +54,8 @@ window.whiteListMint = async function (mintRequest) {
     return actor.whiteListMint(mintRequest)
 }
 
-window.bulkMint = async function (mintRequests) {
-    const actor = nft.createActor(nft.canisterId, {
+window.bulkMint = async function (canisterId,mintRequests) {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -63,17 +63,17 @@ window.bulkMint = async function (mintRequests) {
     return actor.bulkMint(mintRequests)
 }
 
-window.whiteListbulkMint = async function (mintRequests) {
-    const actor = nft.createActor(nft.canisterId, {
+window.whiteListbulkMint = async function (canisterId,mintRequests) {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.whiteListbulkMint(mintRequests)
+    return actor.whiteListbulkMint(canisterId,mintRequests)
 }
 
-window.createCollection = async function (request) {
-    const actor = registry.createActor(registry.canisterId, {
+window.createCollection = async function (canisterId,request) {
+    const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -81,8 +81,8 @@ window.createCollection = async function (request) {
     return actor.createCollection(request)
 }
 
-window.setAttributes = async function (attributes) {
-    const actor = registry.createActor(nft.canisterId, {
+window.setAttributes = async function (canisterId,attributes) {
+    const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -90,8 +90,8 @@ window.setAttributes = async function (attributes) {
     return actor.setAttributes(attributes)
 }
 
-window.addLayer = async function (number,layer) {
-    const actor = registry.createActor(nft.canisterId, {
+window.addLayer = async function (canisterId,number,layer) {
+    const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -99,8 +99,8 @@ window.addLayer = async function (number,layer) {
     return actor.addLayer(number,layer)
 }
 
-window.removeLayer = async function (number) {
-    const actor = registry.createActor(nft.canisterId, {
+window.removeLayer = async function (canisterId,number) {
+    const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -108,8 +108,8 @@ window.removeLayer = async function (number) {
     return actor.removeLayer(number)
 }
 
-window.addToWhiteList = async function (principals) {
-    const actor = registry.createActor(nft.canisterId, {
+window.addToWhiteList = async function (canisterId,principals) {
+    const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -117,8 +117,8 @@ window.addToWhiteList = async function (principals) {
     return actor.addToWhiteList(principals)
 }
 
-window.removeFromWhiteList = async function (principal) {
-    const actor = registry.createActor(nft.canisterId, {
+window.removeFromWhiteList = async function (canisterId,principal) {
+    const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -128,7 +128,7 @@ window.removeFromWhiteList = async function (principal) {
 
 //const base64Image = await mergeImages(['/body.png', '/eyes.png', '/mouth.png'])
 
-const colors = [{ value: "red", weight: 100 }, { value: "blue", weight: 100 }, { value: "yellow", weight: 100 }];
+/*const colors = [{ value: "red", weight: 100 }, { value: "blue", weight: 100 }, { value: "yellow", weight: 100 }];
 const directions = [{ value: "up", weight: 100 }, { value: "down", weight: 100 }, { value: "left", weight: 100 }, { value: "right", weight: 100 }];
 const animal = [{ value: "wolf", weight: 100 }, { value: "cow", weight: 100 }, { value: "human", weight: 100 }, { value: "mouse", weight: 100 }];
 const layers = [colors, directions, animal];
@@ -211,4 +211,4 @@ const startCreating = async () => {
     }
     console.log(dnaList.length);
     console.log(dnaList);
-};
+};*/
