@@ -18,8 +18,14 @@ import Blob "mo:base/Blob";
 import Time "mo:base/Time";
 import TrieMap "mo:base/TrieMap";
 import Nat8 "mo:base/Nat8";
+import Attribute "../models/Attribute";
+import Buffer "mo:base/Buffer";
 
 module {
+
+    private type JSON = JSON.JSON;
+    private type Attribute = Attribute.Attribute;
+
     public func natToFloat(value : Nat) : Float {
         return Float.fromInt(value);
     };
@@ -90,5 +96,56 @@ module {
         };
 
         num;
+    };
+
+    public func attributeToJSON(attribute : Attribute) : JSON {
+        let map : HashMap.HashMap<Text, JSON> = HashMap.HashMap<Text, JSON>(
+            0,
+            Text.equal,
+            Text.hash,
+        );
+        map.put("trait_type", #String(attribute.trait_type));
+
+        switch (attribute.value) {
+            case (#text(value)) {
+                map.put("value", #String(value));
+            };
+            case (#number(value)) {
+                map.put("value", #Number(value));
+            };
+            case (#float(value)) {
+                map.put("value", #String(Float.toText(value)));
+            };
+        };
+
+        switch (attribute.display_type) {
+            case (?value) {
+                map.put("display_type", #String(value));
+            };
+            case (null) {
+
+            };
+        };
+        #Object(Iter.toArray(map.entries()));
+    };
+
+    public func createMetaData(description:Text,external_url:Text, image:Text, name:Text, attributes : [Attribute],) : JSON {
+        let map : HashMap.HashMap<Text, JSON> = HashMap.HashMap<Text, JSON>(
+            0,
+            Text.equal,
+            Text.hash,
+        );
+        var _attributes:Buffer.Buffer<JSON> = Buffer.fromArray([]);
+        map.put("description", #String(description));
+        map.put("external_url", #String(external_url));
+        map.put("image", #String(image));
+        map.put("name", #String(name));
+
+        for(attribute in attributes.vals()){
+            let json = attributeToJSON(attribute);
+            _attributes.add(json);
+        };
+        map.put("attributes", #Array(Buffer.toArray(_attributes)));
+        #Object(Iter.toArray(map.entries()));
     };
 };

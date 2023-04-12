@@ -2,6 +2,7 @@
 module {
     public type CollectionRequest = {
         collectionCreator : Principal; 
+        external_url:Text;
         royalty : Float; 
         name : Text; 
         description : Text; 

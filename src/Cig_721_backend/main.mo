@@ -70,6 +70,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var collectionCreator = collectionRequest.collectionCreator;
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
+  private stable let external_url = collectionRequest.external_url;
   private stable let canvasWidth = collectionRequest.canvasWidth;
   private stable let canvasHeight = collectionRequest.canvasHeight;
   private stable var mintPrice = 0;
@@ -82,6 +83,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
+  private stable var imageId : Nat32 = 1;
   private stable var holders = HashMap.empty<Principal, HashMap.HashMap<Nat32, Metadata>>();
   private stable var manifest = HashMap.empty<Nat32, Principal>();
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
@@ -95,6 +97,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var attributes = HashMap.empty<Nat32, [Attribute]>();
   private stable var whiteList : [WhiteList] = [];
   private stable var currentWhiteList : ?WhiteList = null;
+  private stable var images = HashMap.empty<Nat32, Blob>();
 
   ///Query Methods
   public query func getMemorySize() : async Nat {
@@ -351,7 +354,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
       let _metadata : Metadata = {
         mintId = currentId;
-        data = await _composeImage();
+        data = await _createMetaData(description,external_url,name);
       };
 
       //generate NFT
@@ -385,7 +388,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         mintId := mintId + 1;
         let _metadata : Metadata = {
           mintId = currentId;
-          data = await _composeImage();
+          data = await _createMetaData(description,external_url,name);
         };
         _mint(_metadata, recipient);
         manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -609,6 +612,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     } else if (path.size() == 2) {
       switch (path[0]) {
         case ("image") return _imageResponse(path[1]);
+        case ("metaData") return _metaDataResponse(path[1]);
         case (_) return return Http.BAD_REQUEST();
       };
     } else if (path.size() == 3) {
@@ -628,7 +632,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     mintId := mintId + 1;
     let _metadata : Metadata = {
       mintId = currentId;
-      data = await _composeImage();
+      data = await _createMetaData(description,external_url,name);
     };
     _mint(_metadata, recipient);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -643,7 +647,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       mintId := mintId + 1;
       let _metadata : Metadata = {
         mintId = currentId;
-        data = await _composeImage();
+        data = await _createMetaData(description,external_url,name);
       };
       _mint(_metadata, recipient);
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -735,12 +739,29 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   private func _imageResponse(value : Text) : Http.Response {
-    let exist = HashMap.get(metaData, Utils.textToNat32(value), n32Hash, n32Equal);
+    let exist = HashMap.get(images, Utils.textToNat32(value), n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
         let response : Http.Response = {
           status_code = 200;
           headers = [("Content-Type", "image/png")];
+          body = exist;
+          streaming_strategy = null;
+        };
+      };
+      case (null) {
+        return Http.BAD_REQUEST();
+      };
+    };
+  };
+
+  private func _metaDataResponse(value : Text) : Http.Response {
+    let exist = HashMap.get(metaData, Utils.textToNat32(value), n32Hash, n32Equal);
+    switch (exist) {
+      case (?exist) {
+        let response : Http.Response = {
+          status_code = 200;
+          headers = [("Content-Type", "application/json")];
           body = exist.data;
           streaming_strategy = null;
         };
@@ -1363,9 +1384,21 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
     };
   };
-
-  private func _composeImage() : async Blob {
+  private func _createMetaData(description:Text,external_url:Text,name:Text) : async Blob {
     let _attributes = await _roll();
+    let image = await _composeImage(_attributes);
+    let currentImageId = imageId;
+    let _currentImageId = Nat32.toText(currentImageId);
+    imageId := imageId + 1;
+    let canisterId = Principal.toText(Principal.fromActor(this));
+    let imageUrl = "https://" #canisterId #".raw.ic0.app/image" #_currentImageId;
+    images := HashMap.insert(images, currentImageId, n32Hash, n32Equal, image).0;
+    let metaData = Utils.createMetaData(description,external_url,imageUrl,name,_attributes);
+    let json = JSON.show(metaData);
+    Text.encodeUtf8(json)
+  };
+
+  private func _composeImage(_attributes:[Attribute]) : async Blob {
     let _layers : Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
     for (attribute in _attributes.vals()) {
       switch (attribute.layer) {
