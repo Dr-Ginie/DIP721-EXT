@@ -10,33 +10,33 @@ var identity
 
 window.auth = async function (provider) {
     const authClient = await AuthClient.create();
-    if (await authClient.isAuthenticated()) {
-        handleAuthenticated(authClient);
+    let isAuth = await authClient.isAuthenticated()
+    if (isAuth) {
+        return identity.getPrincipal().toString();
+    } else {
+        const days = BigInt(1);
+        const hours = BigInt(24);
+        const nanoseconds = BigInt(3600000000000);
+        const nfid = 'https://nfid.one/authenticate/?applicationName=SpaceTurtle&applicationLogo=https://flutter.dev/images/flutter-logo-sharing.png#authorize';
+        const II = 'https://identity.ic0.app/#authorize';
+
+        await authClient.login({
+            onSuccess: async () => {
+                identity = await authClient.getIdentity();
+            },
+            identityProvider: provider === "nfid" ? nfid : II,
+            // Maximum authorization expiration is 8 days
+            maxTimeToLive: days * hours * nanoseconds,
+        });
+        return identity.getPrincipal().toString();
     }
-    //renderIndex();
-
-
-    const days = BigInt(1);
-    const hours = BigInt(24);
-    const nanoseconds = BigInt(3600000000000);
-    const nfid = 'https://nfid.one/authenticate/?applicationName=SpaceTurtle&applicationLogo=https://flutter.dev/images/flutter-logo-sharing.png#authorize';
-    const II = 'https://identity.ic0.app/#authorize';
-
-    await authClient.login({
-        onSuccess: async () => {
-            identity = await authClient.getIdentity();
-        },
-        identityProvider: provider === "nfid" ? nfid : II,
-        // Maximum authorization expiration is 8 days
-        maxTimeToLive: days * hours * nanoseconds,
-    });
 };
 
 window.getPrincipal = function () {
     return identity.getPrincipal().toString();
 }
 
-window.mint = async function (canisterId,mintRequest) {
+window.mint = async function (canisterId, mintRequest) {
     const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -45,7 +45,7 @@ window.mint = async function (canisterId,mintRequest) {
     return actor.mint(mintRequest)
 }
 
-window.whiteListMint = async function (canisterId,mintRequest) {
+window.whiteListMint = async function (canisterId, mintRequest) {
     const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -54,7 +54,7 @@ window.whiteListMint = async function (canisterId,mintRequest) {
     return actor.whiteListMint(mintRequest)
 }
 
-window.bulkMint = async function (canisterId,mintRequests) {
+window.bulkMint = async function (canisterId, mintRequests) {
     const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -63,16 +63,16 @@ window.bulkMint = async function (canisterId,mintRequests) {
     return actor.bulkMint(mintRequests)
 }
 
-window.whiteListbulkMint = async function (canisterId,mintRequests) {
+window.whiteListbulkMint = async function (canisterId, mintRequests) {
     const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.whiteListbulkMint(canisterId,mintRequests)
+    return actor.whiteListbulkMint(canisterId, mintRequests)
 }
 
-window.createCollection = async function (canisterId,request) {
+window.createCollection = async function (canisterId, request) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -81,7 +81,7 @@ window.createCollection = async function (canisterId,request) {
     return actor.createCollection(request)
 }
 
-window.setAttributes = async function (canisterId,attributes) {
+window.setAttributes = async function (canisterId, attributes) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -90,16 +90,16 @@ window.setAttributes = async function (canisterId,attributes) {
     return actor.setAttributes(attributes)
 }
 
-window.addLayer = async function (canisterId,number,layer) {
+window.addLayer = async function (canisterId, number, layer) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.addLayer(number,layer)
+    return actor.addLayer(number, layer)
 }
 
-window.removeLayer = async function (canisterId,number) {
+window.removeLayer = async function (canisterId, number) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -108,7 +108,7 @@ window.removeLayer = async function (canisterId,number) {
     return actor.removeLayer(number)
 }
 
-window.addToWhiteList = async function (canisterId,principals) {
+window.addToWhiteList = async function (canisterId, principals) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
@@ -117,7 +117,7 @@ window.addToWhiteList = async function (canisterId,principals) {
     return actor.addToWhiteList(principals)
 }
 
-window.removeFromWhiteList = async function (canisterId,principal) {
+window.removeFromWhiteList = async function (canisterId, principal) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
