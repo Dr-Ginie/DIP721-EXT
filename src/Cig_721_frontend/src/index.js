@@ -5,7 +5,6 @@ import nft from "../../declarations/Cig_721_backend";
 import registry from "../../declarations/nft_registry_backend";
 import mergeImages from 'merge-images';
 
-
 var identity
 
 window.auth = async function (provider) {

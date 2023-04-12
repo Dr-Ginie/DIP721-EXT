@@ -21,6 +21,7 @@ import Principal "mo:base/Principal";
 import Prim "mo:prim";
 import Cycles "mo:base/ExperimentalCycles";
 import Nat32 "mo:base/Nat32";
+import Nat8 "mo:base/Nat8";
 import Nat "mo:base/Nat";
 import Time "mo:base/Time";
 import Dip20 "./services/Dip20";
@@ -37,6 +38,7 @@ import Attribute "./models/Attribute";
 import WhiteList "./models/WhiteList";
 import Constants "../Constants";
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
+import Random "mo:base/Random";
 
 actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = this {
 
@@ -69,6 +71,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var collectionCreator = collectionRequest.collectionCreator;
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
+  private stable let canvasWidth = collectionRequest.canvasWidth;
+  private stable let canvasHeight = collectionRequest.canvasHeight;
   private stable var mintPrice = 0;
   private stable let description = collectionRequest.description;
   private stable let banner = collectionRequest.bannerImage;
@@ -403,6 +407,9 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         mintId = currentId;
         data = request.data;
       };
+
+      //generate NFT
+
       _mint(_metadata, request.owner);
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
       currentId;
@@ -1330,5 +1337,52 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         false;
       };
     };
+  };
+
+  private func _pickWeighted(options : [Attribute]) : async ?Attribute {
+    var weightSum : Nat32 = 0;
+    var vistedWeight : Nat32 = 0;
+    var _option : ?Attribute = null;
+    for (option in options.vals()) {
+      weightSum := weightSum + option.weight;
+    };
+
+    let r = await _randomRange(0, weightSum);
+
+    switch (r) {
+      case (?r) {
+        for (option in options.vals()) {
+          vistedWeight := vistedWeight + option.weight;
+          if (r <= vistedWeight) {
+            _option := ?option;
+            return _option;
+          };
+        };
+      };
+      case (null) {
+  
+      };
+    };
+
+    _option
+
+  };
+
+  private func _randomRange(start : Nat32, end : Nat32) : async ?Nat32 {
+    let numbers = Blob.toArray(await Random.blob());
+    var result : ?Nat32 = null;
+    for (number in numbers.vals()) {
+      let _number = Nat32.fromNat(Nat8.toNat(number));
+      if (_number >= start and _number <= end) {
+        result := ?_number;
+      } else {
+        result := await _randomRange(start, end);
+      };
+    };
+    result;
+  };
+
+  private func _composeRandomImage() : async () {
+
   };
 };

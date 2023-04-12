@@ -1,3 +1,4 @@
+import Float "mo:base/Float";
 module {
     public type Attribute = {
         display_type:?Text; 
