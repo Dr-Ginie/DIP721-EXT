@@ -391,7 +391,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     mintPrice := value;
   };
 
-  public shared ({ caller }) func mint(request : MintRequest, recipient : Principal) : async Nat32 {
+  public shared ({ caller }) func mint(recipient : Principal) : async Nat32 {
     let tempOffer : Offer = {
       offerId = 0;
       mintId = 0;
@@ -405,33 +405,34 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       await _tokenTransferFrom(tempOffer);
       let currentId = mintId;
       mintId := mintId + 1;
+
       let _metadata : Metadata = {
         mintId = currentId;
-        data = request.data;
+        data = await _composeImage();
       };
 
       //generate NFT
 
-      _mint(_metadata, request.owner);
+      _mint(_metadata, recipient);
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
       currentId;
     } else if (isWhiteListMinting == true) {
       await _tokenTransferFrom(tempOffer);
-      _whiteListMint(caller, request);
+      await _whiteListMint(caller, recipient);
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
   };
 
-  private func _whiteListMint(caller : Principal, request : MintRequest) : Nat32 {
+  private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
     assert (_isWhiteList(caller));
     let currentId = mintId;
     mintId := mintId + 1;
     let _metadata : Metadata = {
       mintId = currentId;
-      data = request.data;
+      data = await _composeImage();
     };
-    _mint(_metadata, request.owner);
+    _mint(_metadata, recipient);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
     currentId;
   };
@@ -1341,7 +1342,16 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _pickWeighted(options : [Attribute]) : async ?Attribute {
+  private func _roll() : async [Attribute] {
+    var results : Buffer.Buffer<Attribute> = Buffer.fromArray([]); 
+    for ((key, _attributes) in HashMap.entries(attributes)) {
+      let result = await _pickWeighted(_attributes);
+      results.add(result);
+    };
+    Buffer.toArray(results);
+  };
+
+  private func _pickWeighted(options : [Attribute]) : async Attribute {
     var weightSum : Nat32 = 0;
     var vistedWeight : Nat32 = 0;
     var _option : ?Attribute = null;
@@ -1350,39 +1360,48 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
 
     let r = await _randomRange(0, weightSum);
-
     switch (r) {
       case (?r) {
         for (option in options.vals()) {
           vistedWeight := vistedWeight + option.weight;
-          if (r <= vistedWeight) {
-            _option := ?option;
-            return _option;
+          if (_option == null) {
+            if (r <= vistedWeight) {
+              _option := ?option;
+            } else {
+              _option := ?(await _pickWeighted(options));
+            };
           };
         };
       };
       case (null) {
-  
+        _option := ?(await _pickWeighted(options));
       };
     };
 
-    _option
-
+    switch (_option) {
+      case (?_option) {
+        return _option;
+      };
+      case (null) {
+        await _pickWeighted(options);
+      };
+    };
   };
 
-  private func _composeImage(attributes:[Attribute]) : async Blob {
-    let _layers:Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
-    for(attribute in attributes.vals()) {
-      switch(attribute.layer){
-        case(?layer){
+  private func _composeImage() : async Blob {
+    let _attributes = await _roll();
+    let _layers : Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
+    for (attribute in _attributes.vals()) {
+      switch (attribute.layer) {
+        case (?layer) {
           _layers.add(Blob.toArray(layer.value));
         };
-        case(null){
+        case (null) {
 
-        }
+        };
       };
     };
-    let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers),canvasWidth,canvasHeight);
+    let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers), canvasWidth, canvasHeight);
     Blob.fromArray(bytes);
   };
 
