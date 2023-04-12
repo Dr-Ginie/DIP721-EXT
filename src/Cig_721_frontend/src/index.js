@@ -10,7 +10,9 @@ var identity
 window.auth = async function (provider) {
     const authClient = await AuthClient.create();
     let isAuth = await authClient.isAuthenticated()
+
     if (isAuth) {
+        identity = await authClient.getIdentity();
         return identity.getPrincipal().toString();
     } else {
         const days = BigInt(1);
@@ -30,6 +32,11 @@ window.auth = async function (provider) {
         return identity.getPrincipal().toString();
     }
 };
+
+window.isAuthenticated = async function () {
+    const authClient = await AuthClient.create();
+    return await authClient.isAuthenticated();
+}
 
 window.getPrincipal = function () {
     return identity.getPrincipal().toString();
