@@ -13,7 +13,6 @@ import Error "mo:base/Error";
 import TrieMap "mo:base/TrieMap";
 import Trie "mo:base/Trie";
 import Metadata "models/Metadata";
-import MintRequest "models/MintRequest";
 import Offer "models/Offer";
 import Price "models/Price";
 import Bid "models/Bid";
@@ -44,7 +43,6 @@ import Random "mo:base/Random";
 actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = this {
 
   private type Metadata = Metadata.Metadata;
-  private type MintRequest = MintRequest.MintRequest;
   private type Offer = Offer.Offer;
   private type Price = Price.Price;
   private type Bid = Bid.Bid;

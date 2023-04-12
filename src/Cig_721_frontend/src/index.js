@@ -42,40 +42,22 @@ window.getPrincipal = function () {
     return identity.getPrincipal().toString();
 }
 
-window.mint = async function (canisterId, mintRequest) {
+window.mint = async function (canisterId, recipent) {
     const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.mint(mintRequest)
+    return actor.mint(recipent)
 }
 
-window.whiteListMint = async function (canisterId, mintRequest) {
+window.bulkMint = async function (canisterId, count, recipent) {
     const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.whiteListMint(mintRequest)
-}
-
-window.bulkMint = async function (canisterId, mintRequests) {
-    const actor = nft.createActor(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
-    return actor.bulkMint(mintRequests)
-}
-
-window.whiteListbulkMint = async function (canisterId, mintRequests) {
-    const actor = nft.createActor(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
-    return actor.whiteListbulkMint(canisterId, mintRequests)
+    return actor.bulkMint(count, recipent)
 }
 
 window.createCollection = async function (canisterId, request) {
