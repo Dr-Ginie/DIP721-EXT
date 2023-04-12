@@ -32,6 +32,11 @@ window.auth = async function (provider) {
     }
 };
 
+window.isAuthenticated = async function () {
+    const authClient = await AuthClient.create();
+    return await authClient.isAuthenticated();
+}
+
 window.getPrincipal = function () {
     return identity.getPrincipal().toString();
 }
