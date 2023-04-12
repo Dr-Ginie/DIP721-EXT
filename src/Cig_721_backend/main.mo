@@ -27,6 +27,7 @@ import Time "mo:base/Time";
 import Dip20 "./services/Dip20";
 import Cig20 "./services/Cig20";
 import ICRC2 "./services/ICRC2";
+import Minter "./services/Minter";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
 import Token "./models/Token";
@@ -79,6 +80,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable let profile = collectionRequest.profileImage;
   private stable var isMinting = false;
   private stable var isWhiteListMinting = false;
+  private stable var minterCanisterId = "";
 
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
@@ -1368,6 +1370,22 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   };
 
+  private func _composeImage(attributes:[Attribute]) : async Blob {
+    let _layers:Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
+    for(attribute in attributes.vals()) {
+      switch(attribute.layer){
+        case(?layer){
+          _layers.add(Blob.toArray(layer.value));
+        };
+        case(null){
+
+        }
+      };
+    };
+    let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers),canvasWidth,canvasHeight);
+    Blob.fromArray(bytes);
+  };
+
   private func _randomRange(start : Nat32, end : Nat32) : async ?Nat32 {
     let numbers = Blob.toArray(await Random.blob());
     var result : ?Nat32 = null;
@@ -1380,9 +1398,5 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
     };
     result;
-  };
-
-  private func _composeRandomImage() : async () {
-
   };
 };
