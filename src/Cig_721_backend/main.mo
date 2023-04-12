@@ -608,7 +608,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
     } else if (path.size() == 2) {
       switch (path[0]) {
-        case ("metadata") return _metadataResponse(path[1]);
+        case ("image") return _imageResponse(path[1]);
         case (_) return return Http.BAD_REQUEST();
       };
     } else if (path.size() == 3) {
@@ -734,13 +734,13 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _metadataResponse(value : Text) : Http.Response {
+  private func _imageResponse(value : Text) : Http.Response {
     let exist = HashMap.get(metaData, Utils.textToNat32(value), n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
         let response : Http.Response = {
           status_code = 200;
-          headers = [("Content-Type", "application/json")];
+          headers = [("Content-Type", "image/png")];
           body = exist.data;
           streaming_strategy = null;
         };

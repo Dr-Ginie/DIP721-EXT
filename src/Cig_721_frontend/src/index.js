@@ -114,15 +114,6 @@ window.removeLayer = async function (canisterId, number) {
     return actor.removeLayer(number)
 }
 
-window.addToWhiteList = async function (canisterId, principals) {
-    const actor = registry.createActor(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
-    return actor.addToWhiteList(principals)
-}
-
 window.removeFromWhiteList = async function (canisterId, principal) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
