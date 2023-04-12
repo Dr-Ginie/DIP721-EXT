@@ -437,50 +437,50 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     currentId;
   };
 
-  public shared ({ caller }) func bulkMint(requests : [MintRequest], recipient : Principal) : async [Nat32] {
+  public shared ({ caller }) func bulkMint(count : Nat32, recipient : Principal) : async [Nat32] {
     let tempOffer : Offer = {
       offerId = 0;
       mintId = 0;
       seller = Principal.fromActor(this);
       buyer = recipient;
-      amount = mintPrice * requests.size();
+      amount = mintPrice * Nat32.toNat(count);
       token = #Dip20(Constants.WICP_Canister);
       expiration = null;
     };
     if (isMinting == false) {
       await _tokenTransferFrom(tempOffer);
       var result : [Nat32] = [];
-      for (request in requests.vals()) {
+      for (j in Iter.range(0, Nat32.toNat(count))) {
         let currentId = mintId;
         mintId := mintId + 1;
         let _metadata : Metadata = {
           mintId = currentId;
-          data = request.data;
+          data = await _composeImage();
         };
-        _mint(_metadata, request.owner);
+        _mint(_metadata, recipient);
         manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
         result := Array.append(result, [currentId]);
       };
       result;
     } else if (isWhiteListMinting == false) {
       await _tokenTransferFrom(tempOffer);
-      _whiteListbulkMint(caller, requests);
+      await _whiteListbulkMint(caller, count, recipient);
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
   };
 
-  private func _whiteListbulkMint(caller : Principal, requests : [MintRequest]) : [Nat32] {
+  private func _whiteListbulkMint(caller : Principal, count:Nat32, recipient : Principal) : async [Nat32] {
     assert (_isWhiteList(caller));
     var result : [Nat32] = [];
-    for (request in requests.vals()) {
+    for (j in Iter.range(0, Nat32.toNat(count))) {
       let currentId = mintId;
       mintId := mintId + 1;
       let _metadata : Metadata = {
         mintId = currentId;
-        data = request.data;
+        data = await _composeImage();
       };
-      _mint(_metadata, request.owner);
+      _mint(_metadata, recipient);
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
       result := Array.append(result, [currentId]);
     };
