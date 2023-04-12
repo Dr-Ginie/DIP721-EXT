@@ -87,32 +87,59 @@ window.createCollection = async function (canisterId, request) {
     return actor.createCollection(request)
 }
 
-window.setAttributes = async function (canisterId, attributes) {
+window.addAttributes = async function (canisterId, zindex, attributes) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.setAttributes(attributes)
+    return actor.addAttributes(zindex, attributes)
 }
 
-window.addLayer = async function (canisterId, number, layer) {
+window.getAttribute = async function (canisterId, zindex) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.addLayer(number, layer)
+    return actor.getAttribute(zindex)
 }
 
-window.removeLayer = async function (canisterId, number) {
+window.fetchAttributes = async function (canisterId, zindex) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.removeLayer(number)
+    return actor.fetchAttributes(zindex)
 }
+
+window.removeAttrubute = async function (canisterId, zindex) {
+    const actor = registry.createActor(canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.removeAttrubute(zindex)
+}
+
+// window.addLayer = async function (canisterId, number, layer) {
+//     const actor = registry.createActor(canisterId, {
+//         agentOptions: {
+//             identity,
+//         },
+//     });
+//     return actor.addLayer(number, layer)
+// }
+
+// window.removeLayer = async function (canisterId, number) {
+//     const actor = registry.createActor(canisterId, {
+//         agentOptions: {
+//             identity,
+//         },
+//     });
+//     return actor.removeLayer(number)
+// }
 
 window.removeFromWhiteList = async function (canisterId, principal) {
     const actor = registry.createActor(canisterId, {
