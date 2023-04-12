@@ -88,7 +88,7 @@ window.createCollection = async function (canisterId, request) {
 }
 
 window.addAttributes = async function (canisterId, zindex, attributes) {
-    const actor = registry.createActor(canisterId, {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -97,7 +97,7 @@ window.addAttributes = async function (canisterId, zindex, attributes) {
 }
 
 window.getAttribute = async function (canisterId, zindex) {
-    const actor = registry.createActor(canisterId, {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -106,7 +106,7 @@ window.getAttribute = async function (canisterId, zindex) {
 }
 
 window.fetchAttributes = async function (canisterId, zindex) {
-    const actor = registry.createActor(canisterId, {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -115,7 +115,7 @@ window.fetchAttributes = async function (canisterId, zindex) {
 }
 
 window.removeAttrubute = async function (canisterId, zindex) {
-    const actor = registry.createActor(canisterId, {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
@@ -142,7 +142,7 @@ window.removeAttrubute = async function (canisterId, zindex) {
 // }
 
 window.removeFromWhiteList = async function (canisterId, principal) {
-    const actor = registry.createActor(canisterId, {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
