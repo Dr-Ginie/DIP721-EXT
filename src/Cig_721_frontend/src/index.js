@@ -96,26 +96,53 @@ window.addAttribute = async function (canisterId, number, attributes) {
     return actor.addAttribute(number,attributes)
 }
 
-window.addLayer = async function (canisterId, number, layer) {
-    const actor = registry.createActor(canisterId, {
+window.getAttribute = async function (canisterId, zindex) {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.addLayer(number, layer)
+    return actor.getAttribute(zindex)
 }
 
-window.removeLayer = async function (canisterId, number) {
-    const actor = registry.createActor(canisterId, {
+window.fetchAttributes = async function (canisterId, zindex) {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.removeLayer(number)
+    return actor.fetchAttributes(zindex)
 }
+
+window.removeAttrubute = async function (canisterId, zindex) {
+    const actor = nft.createActor(canisterId, {
+        agentOptions: {
+            identity,
+        },
+    });
+    return actor.removeAttrubute(zindex)
+}
+
+// window.addLayer = async function (canisterId, number, layer) {
+//     const actor = registry.createActor(canisterId, {
+//         agentOptions: {
+//             identity,
+//         },
+//     });
+//     return actor.addLayer(number, layer)
+// }
+
+// window.removeLayer = async function (canisterId, number) {
+//     const actor = registry.createActor(canisterId, {
+//         agentOptions: {
+//             identity,
+//         },
+//     });
+//     return actor.removeLayer(number)
+// }
 
 window.removeFromWhiteList = async function (canisterId, principal) {
-    const actor = registry.createActor(canisterId, {
+    const actor = nft.createActor(canisterId, {
         agentOptions: {
             identity,
         },
