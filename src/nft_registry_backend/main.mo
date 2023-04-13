@@ -240,6 +240,7 @@ actor class NFT_Registry(_owner : Principal) = this {
   };
 
   public shared ({ caller }) func createCollection(request:CollectionRequest) : async Text {
+    Cycles.add(1_700_000_000_000);
     let canister = await Cig721.Cig721(request);
     Principal.toText(Principal.fromActor(canister))
   };

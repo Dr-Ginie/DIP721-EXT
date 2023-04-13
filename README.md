@@ -1,7 +1,8 @@
 
 **deploy commands**
 DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Cig_721_backend --argument '(record {
-        collectionCreator = principal "qtkcs-s2ah4-2525z-isucu-pkb3c-gdhke-pp2l2-xt5ye-ttcin-3weru-xqe";
+        collectionCreator = principal "nwhj3-domm4-4sjbd-ndrhf-rh64h-ebnyb-hjiz3-ilyjy-i22nv-jwndr-vae";
+        external_url = "https://www.youtube.com/";
         royalty = 2.0;
         name = "Collection name";
         description = "a colelction of 10000 hungry rats";
@@ -11,7 +12,7 @@ DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Cig_721_backend --argument '(record 
         canvasHeight = 2400;
 })'
 
-DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy nft_registry_backend --argument '(principal "qtkcs-s2ah4-2525z-isucu-pkb3c-gdhke-pp2l2-xt5ye-ttcin-3weru-xqe")'
+DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy nft_registry_backend --argument '(principal "i47jd-kewyq-vcner-l4xf7-edf77-aw4xp-u2kpb-2qai2-6ie7k-tcngl-oqe")'
 DFX_MOC_PATH="$(vessel bin)/moc" dfx generate
 DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Cig_721_frontend
 

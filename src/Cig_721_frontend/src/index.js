@@ -87,13 +87,13 @@ window.createCollection = async function (canisterId, request) {
     return actor.createCollection(request)
 }
 
-window.setAttributes = async function (canisterId, attributes) {
+window.addAttribute = async function (canisterId, number, attributes) {
     const actor = registry.createActor(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.setAttributes(attributes)
+    return actor.addAttribute(number,attributes)
 }
 
 window.addLayer = async function (canisterId, number, layer) {

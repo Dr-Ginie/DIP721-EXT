@@ -81,6 +81,9 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var isWhiteListMinting = false;
   private stable var minterCanisterId = "";
 
+  private var capacity = 1000000000000000000;
+  private var cyclesBalance = Cycles.balance();
+
   private stable var mintId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
   private stable var imageId : Nat32 = 1;
@@ -1427,4 +1430,16 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
     result;
   };
+
+  // Returns the cycles received up to the capacity allowed
+  public func wallet_receive() : async { accepted : Nat64 } {
+    let amount = Cycles.available();
+    let limit : Nat = capacity - cyclesBalance;
+    let accepted = if (amount <= limit) amount else limit;
+    let deposit = Cycles.accept(accepted);
+    assert (deposit == accepted);
+    cyclesBalance += accepted;
+    { accepted = Nat64.fromNat(accepted) };
+  };
+
 };
