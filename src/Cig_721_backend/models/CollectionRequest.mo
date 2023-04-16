@@ -1,7 +1,7 @@
 
 module {
     public type CollectionRequest = {
-        collectionCreator : Principal; 
+        collectionCreator : Text; 
         external_url:Text;
         royalty : Float; 
         name : Text; 

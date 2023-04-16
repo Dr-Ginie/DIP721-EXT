@@ -66,8 +66,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   let icrc2Buffer = 1000000000 * 1;
 
-  private stable var collectionOwner = collectionRequest.collectionCreator;
-  private stable var collectionCreator = collectionRequest.collectionCreator;
+  private stable var collectionOwner = Principal.fromText(collectionRequest.collectionCreator);
+  private stable var collectionCreator = Principal.fromText(collectionRequest.collectionCreator);
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
   private stable let external_url = collectionRequest.external_url;
@@ -304,8 +304,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     attributes := newAttributes;
   };
 
-  public shared ({ caller }) func addAttribute(number : Nat32, attribute : [Attribute]) : async () {
-    assert (caller == collectionOwner);
+  public shared ({ caller }) func addAttribute(number : Nat32, attribute : [Attribute]) : async Text {
+    //assert (caller == collectionOwner);
     assert (isMinting == false);
     assert (isWhiteListMinting == false);
     let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
@@ -318,7 +318,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         attributes := HashMap.insert(attributes, number, n32Hash, n32Equal, attribute).0;
       };
     };
-
+    "success"
   };
 
   public shared ({ caller }) func startMint(duration : Nat) : async () {

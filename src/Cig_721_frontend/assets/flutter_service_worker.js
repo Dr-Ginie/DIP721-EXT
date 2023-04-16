@@ -4,25 +4,30 @@ const TEMP = 'flutter-temp-cache';
 const CACHE_NAME = 'flutter-app-cache';
 const RESOURCES = {
   "version.json": "ca8d661d10adfc681b2468f610a1d1bf",
-"index.html": "c919c0cefc2c54d6a77f44287d2a2dbf",
-"/": "c919c0cefc2c54d6a77f44287d2a2dbf",
-"main.dart.js": "7f514c280c7ff36712974275421d726c",
-"flutter.js": "1cfe996e845b3a8a33f57607e8b09ee4",
+"nft.js": "c2a77fc6d12d4085211b7e60a4118d95",
+"registry.js": "12e125721cccaf25d2a6518d84d12b41",
+"index.html": "d1956668306944ed2438f7da1426930e",
+"/": "d1956668306944ed2438f7da1426930e",
+"main.dart.js": "0575e294ff2b9078a84634341a5725dc",
+"principal.js": "d4af9c5d7bc2b0a71699a9e3288a4591",
+"index.js": "7591e3eabef7ad605866b465ba7c1fee",
 "favicon.png": "5dcef449791fa27946b3d35ad8803796",
 "icons/Icon-192.png": "ac9a721a12bbc803b44f645561ecb1e1",
 "icons/Icon-maskable-192.png": "c457ef57daa1d16f64b27b786ec2ea3c",
 "icons/Icon-maskable-512.png": "301a7604d45b3e739efc881eb04896ea",
 "icons/Icon-512.png": "96e752610906ba2a93c65f8abe1645f1",
 "manifest.json": "625ceaf8098525541b529781bd479b7c",
-"assets/AssetManifest.json": "2efbb41d7877d10aac9d091f58ccd7b9",
-"assets/NOTICES": "57eda7050bab7ad99ad73c11e41a333d",
-"assets/FontManifest.json": "dc3d03800ccca4601324923c0b1d6d57",
+"nft_idl.js": "b95712c01b8d0e540f37e34325a5ef15",
+"registry_idl.js": "4c62083a706114d6682bf2dc21a055e5",
+"assets/AssetManifest.json": "e258f340273a759dcce3f99806479788",
+"assets/NOTICES": "a740e2900cb72c5a71f8909194b09750",
+"assets/FontManifest.json": "66b71d2bcd2b436ab06cceee43157084",
 "assets/packages/cupertino_icons/assets/CupertinoIcons.ttf": "6d342eb68f170c97609e9da345464e5e",
+"assets/packages/ionicons/assets/fonts/Ionicons.ttf": "a48ca9e5bcc89fccac32592416234257",
 "assets/fonts/MaterialIcons-Regular.otf": "e7069dfd19b331be16bed984668fe080",
-"canvaskit/canvaskit.js": "97937cb4c2c2073c968525a3e08c86a3",
-"canvaskit/profiling/canvaskit.js": "c21852696bc1cc82e8894d851c01921a",
-"canvaskit/profiling/canvaskit.wasm": "371bc4e204443b0d5e774d64a046eb99",
-"canvaskit/canvaskit.wasm": "3de12d898ec208a5f31362cc00f09b9e"
+"assets/assets/images/nfid.png": "b3da6137f7a9a69105bbea754653acc7",
+"assets/assets/images/ii.png": "70c4564e88cb377dfe36b71d777b1009",
+"plug.js": "8b0fe4e6efef99cb05ed090a235178ed"
 };
 
 // The application shell files that are downloaded before a service worker can

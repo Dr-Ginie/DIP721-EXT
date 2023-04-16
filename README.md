@@ -1,7 +1,7 @@
 
 **deploy commands**
 DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Cig_721_backend --argument '(record {
-        collectionCreator = principal "nwhj3-domm4-4sjbd-ndrhf-rh64h-ebnyb-hjiz3-ilyjy-i22nv-jwndr-vae";
+        collectionCreator = "nwhj3-domm4-4sjbd-ndrhf-rh64h-ebnyb-hjiz3-ilyjy-i22nv-jwndr-vae";
         external_url = "https://www.youtube.com/";
         royalty = 2.0;
         name = "Collection name";

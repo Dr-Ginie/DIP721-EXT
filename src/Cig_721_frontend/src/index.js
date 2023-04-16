@@ -1,9 +1,6 @@
 import { AuthClient } from "@dfinity/auth-client";
-//import { renderIndex } from "./views";
-//import { renderLoggedIn } from "./views/loggedIn";
-import nft from "../../declarations/Cig_721_backend";
-import registry from "../../declarations/nft_registry_backend";
-import mergeImages from 'merge-images';
+import { createActor as nft } from "../../declarations/Cig_721_backend";
+import { createActor as registry } from "../../declarations/nft_registry_backend";
 
 var identity
 
@@ -43,7 +40,7 @@ window.getPrincipal = function () {
 }
 
 window.mint = async function (canisterId, recipent) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -52,7 +49,7 @@ window.mint = async function (canisterId, recipent) {
 }
 
 window.bulkMint = async function (canisterId, count, recipent) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -61,7 +58,7 @@ window.bulkMint = async function (canisterId, count, recipent) {
 }
 
 window.addWhiteList = async function (canisterId, whiteList) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -70,7 +67,7 @@ window.addWhiteList = async function (canisterId, whiteList) {
 }
 
 window.setMintPrice = async function (canisterId, value) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -78,8 +75,19 @@ window.setMintPrice = async function (canisterId, value) {
     return actor.setMintPrice(value)
 }
 
-window.createCollection = async function (canisterId, request) {
-    const actor = registry.createActor(canisterId, {
+window.createCollection = async function (canisterId, collectionCreator, external_url, profileImage, name, description, canvasHeight, bannerImage, canvasWidth, royalty) {
+    let request = {
+        'collectionCreator': collectionCreator,
+        'external_url': external_url,
+        'profileImage': profileImage,
+        'name': name,
+        'description': description,
+        'canvasHeight': canvasHeight,
+        'bannerImage': bannerImage,
+        'canvasWidth': canvasWidth,
+        'royalty': royalty,
+    };
+    const actor = registry(canisterId, {
         agentOptions: {
             identity,
         },
@@ -87,17 +95,61 @@ window.createCollection = async function (canisterId, request) {
     return actor.createCollection(request)
 }
 
-window.addAttribute = async function (canisterId, number, attributes) {
-    const actor = registry.createActor(canisterId, {
+var attributesList = []
+
+window.newAttribute = async function (weight, trait_type, value_type, value, contentType, layer_value, display_type) {
+    console.log(weight)
+    console.log(trait_type)
+    console.log(value_type)
+    console.log(value)
+    console.log(contentType)
+    console.log(layer_value)
+    console.log(display_type)
+
+    var value_;
+
+    switch (value_type) {
+        case 'float':
+            value_ = {"float":value}
+            break;
+        case 'text':
+            value_ = {"text":value}
+            break;
+        case 'number':
+            value_ = {"number":value}
+            break;
+    }
+
+    let layer = {
+        'contentType': contentType,
+        'value': layer_value,
+    };
+
+    let attribute = {
+        'weight': weight,
+        'trait_type': trait_type,
+        'value': value_,
+        'layer': [layer],
+        'display_type': display_type,
+    }
+
+    attributesList.push(attribute)
+}
+
+window.addAttribute = async function (canisterId, number) {
+    console.log(attributesList);
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
     });
-    return actor.addAttribute(number,attributes)
+    let result = await actor.addAttribute(number, attributesList);
+    attributesList = [];
+    console.log(result);
 }
 
 window.getAttribute = async function (canisterId, zindex) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -106,7 +158,7 @@ window.getAttribute = async function (canisterId, zindex) {
 }
 
 window.fetchAttributes = async function (canisterId, zindex) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -115,7 +167,7 @@ window.fetchAttributes = async function (canisterId, zindex) {
 }
 
 window.removeAttrubute = async function (canisterId, zindex) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -124,7 +176,7 @@ window.removeAttrubute = async function (canisterId, zindex) {
 }
 
 // window.addLayer = async function (canisterId, number, layer) {
-//     const actor = registry.createActor(canisterId, {
+//     const actor = registry(canisterId, {
 //         agentOptions: {
 //             identity,
 //         },
@@ -133,7 +185,7 @@ window.removeAttrubute = async function (canisterId, zindex) {
 // }
 
 // window.removeLayer = async function (canisterId, number) {
-//     const actor = registry.createActor(canisterId, {
+//     const actor = registry(canisterId, {
 //         agentOptions: {
 //             identity,
 //         },
@@ -142,7 +194,7 @@ window.removeAttrubute = async function (canisterId, zindex) {
 // }
 
 window.removeFromWhiteList = async function (canisterId, principal) {
-    const actor = nft.createActor(canisterId, {
+    const actor = nft(canisterId, {
         agentOptions: {
             identity,
         },
@@ -150,89 +202,19 @@ window.removeFromWhiteList = async function (canisterId, principal) {
     return actor.removeFromWhiteList(principal)
 }
 
-//const base64Image = await mergeImages(['/body.png', '/eyes.png', '/mouth.png'])
-
-/*const colors = [{ value: "red", weight: 100 }, { value: "blue", weight: 100 }, { value: "yellow", weight: 100 }];
-const directions = [{ value: "up", weight: 100 }, { value: "down", weight: 100 }, { value: "left", weight: 100 }, { value: "right", weight: 100 }];
-const animal = [{ value: "wolf", weight: 100 }, { value: "cow", weight: 100 }, { value: "human", weight: 100 }, { value: "mouse", weight: 100 }];
-const layers = [colors, directions, animal];
-
-const DNA_DELIMITER = "-";
-var dnaList = new Set();
-
-const isDnaUnique = (_DnaList = new Set(), _dna = "") => {
-    const _filteredDNA = filterDNAOptions(_dna);
-    return !_DnaList.has(_filteredDNA);
-};
-
-const filterDNAOptions = (_dna) => {
-    const dnaItems = _dna.split(DNA_DELIMITER);
-    const filteredDNA = dnaItems.filter((element) => {
-        const query = /(\?.*$)/;
-        const querystring = query.exec(element);
-        if (!querystring) {
-            return true;
-        }
-        const options = querystring[1].split("&").reduce((r, setting) => {
-            const keyPairs = setting.split("=");
-            return { ...r, [keyPairs[0]]: keyPairs[1] };
-        }, []);
-
-        return options.bypassDNA;
-    });
-
-    return filteredDNA.join(DNA_DELIMITER);
-};
-
-const createDna = (_layers) => {
-    let randNum = [];
-    _layers.forEach((layer) => {
-        var totalWeight = 0;
-        layer.forEach((element) => {
-            totalWeight += element.weight;
-        });
-        // number between 0 - totalWeight
-        let random = Math.floor(Math.random() * totalWeight);
-        for (var i = 0; i < layer.length; i++) {
-            // subtract the current weight from the random weight until we reach a sub zero value.
-            random -= layer[i].weight;
-            if (random < 0) {
-                return randNum.push(
-                    `${layer[i].value}`
-                );
+function stringify(obj) {
+    let cache = [];
+    let str = JSON.stringify(obj, function (key, value) {
+        if (typeof value === "object" && value !== null) {
+            if (cache.indexOf(value) !== -1) {
+                // Circular reference found, discard key
+                return;
             }
+            // Store value in our collection
+            cache.push(value);
         }
+        return value;
     });
-    return randNum.join(DNA_DELIMITER);
-};
-
-const startCreating = async () => {
-    let layerConfigIndex = 0;
-    let editionCount = 1;
-    let growEditionSizeTo = 20;
-    let failedCount = 0;
-    let abstractedIndexes = [];
-    let uniqueDnaTorrance = 5;
-
-    while (
-        editionCount <= growEditionSizeTo
-    ) {
-        let newDna = createDna(layers);
-        if (isDnaUnique(dnaList, newDna)) {
-            dnaList.add(filterDNAOptions(newDna));
-            editionCount++;
-            abstractedIndexes.shift();
-        } else {
-            console.log("DNA exists!");
-            failedCount++;
-            if (failedCount >= uniqueDnaTorrance) {
-                console.log(
-                    `You need more layers or elements to grow your edition to ${growEditionSizeTo} artworks!`
-                );
-                process.exit();
-            }
-        }
-    }
-    console.log(dnaList.length);
-    console.log(dnaList);
-};*/
+    cache = null; // reset the cache
+    return str;
+}
