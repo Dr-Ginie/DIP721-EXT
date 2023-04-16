@@ -1,8 +1,18 @@
 import { AuthClient } from "@dfinity/auth-client";
-import { createActor as nft } from "../../declarations/Cig_721_backend";
-import { createActor as registry } from "../../declarations/nft_registry_backend";
+import { createActor as nft, idlFactory as nftIdl } from "../../declarations/Cig_721_backend";
+import { createActor as registry, idlFactory as registryIDL } from "../../declarations/nft_registry_backend";
 
 var identity
+var isPlug = false;
+var registryCanister = "p26c3-yyaaa-aaaan-qdd6q-cai";
+var principal;
+
+window.connectPlug = async function () {
+    await window?.ic?.plug?.requestConnect();
+    principal = await window.ic.plug.agent.getPrincipal();
+    isPlug = true;
+    return principal.toString();
+}
 
 window.auth = async function (provider) {
     const authClient = await AuthClient.create();
@@ -26,56 +36,97 @@ window.auth = async function (provider) {
             // Maximum authorization expiration is 8 days
             maxTimeToLive: days * hours * nanoseconds,
         });
+        isPlug = false;
         return identity.getPrincipal().toString();
     }
 };
 
 window.isAuthenticated = async function () {
-    const authClient = await AuthClient.create();
-    return await authClient.isAuthenticated();
+    if (isPlug) {
+        return await window.ic.plug.isConnected();;
+    } else {
+        const authClient = await AuthClient.create();
+        return await authClient.isAuthenticated();
+    }
 }
 
 window.getPrincipal = function () {
-    return identity.getPrincipal().toString();
+    if (isPlug) {
+        return principal;
+    } else {
+        return identity.getPrincipal().toString();
+    }
 }
 
 window.mint = async function (canisterId, recipent) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.mint(recipent)
 }
 
 window.bulkMint = async function (canisterId, count, recipent) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.bulkMint(count, recipent)
 }
 
 window.addWhiteList = async function (canisterId, whiteList) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.addWhiteList(whiteList)
 }
 
 window.setMintPrice = async function (canisterId, value) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.setMintPrice(value)
 }
 
-window.createCollection = async function (canisterId, collectionCreator, external_url, profileImage, name, description, canvasHeight, bannerImage, canvasWidth, royalty) {
+window.createCollection = async function (collectionCreator, external_url, profileImage, name, description, canvasHeight, bannerImage, canvasWidth, royalty) {
     let request = {
         'collectionCreator': collectionCreator,
         'external_url': external_url,
@@ -87,11 +138,19 @@ window.createCollection = async function (canisterId, collectionCreator, externa
         'canvasWidth': canvasWidth,
         'royalty': royalty,
     };
-    const actor = registry(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: registryCanister,
+            interfaceFactory: registryIDL,
+        });
+    } else {
+        actor = registry(registryCanister, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.createCollection(request)
 }
 
@@ -110,13 +169,13 @@ window.newAttribute = async function (weight, trait_type, value_type, value, con
 
     switch (value_type) {
         case 'float':
-            value_ = {"float":value}
+            value_ = { "float": value }
             break;
         case 'text':
-            value_ = {"text":value}
+            value_ = { "text": value }
             break;
         case 'number':
-            value_ = {"number":value}
+            value_ = { "number": value }
             break;
     }
 
@@ -138,83 +197,99 @@ window.newAttribute = async function (weight, trait_type, value_type, value, con
 
 window.addAttribute = async function (canisterId, number) {
     console.log(attributesList);
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    console.log("add attribue");
+    console.log(isPlug);
+    var actor;
+    switch (isPlug) {
+        case true:
+            console.log("is plug")
+            actor = await window.ic.plug.createActor({
+                canisterId: canisterId,
+                interfaceFactory: nftIdl,
+            });
+            break;
+        case false:
+            console.log("is not plug")
+            actor = nft(canisterId, {
+                agentOptions: {
+                    identity,
+                },
+            });
+            break;
+    }
+    console.log(attributesList[0])
     let result = await actor.addAttribute(number, attributesList);
-    attributesList = [];
     console.log(result);
+    attributesList = [];
+    
 }
 
 window.getAttribute = async function (canisterId, zindex) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
-    return actor.getAttribute(zindex)
+    if (isPlug) {
+        console.log("is plug")
+        var actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+        return actor.getAttribute(zindex)
+    } else {
+        console.log("not plug")
+        var actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+        return actor.getAttribute(zindex)
+    }
 }
 
 window.fetchAttributes = async function (canisterId, zindex) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.fetchAttributes(zindex)
 }
 
 window.removeAttrubute = async function (canisterId, zindex) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.removeAttrubute(zindex)
 }
 
-// window.addLayer = async function (canisterId, number, layer) {
-//     const actor = registry(canisterId, {
-//         agentOptions: {
-//             identity,
-//         },
-//     });
-//     return actor.addLayer(number, layer)
-// }
-
-// window.removeLayer = async function (canisterId, number) {
-//     const actor = registry(canisterId, {
-//         agentOptions: {
-//             identity,
-//         },
-//     });
-//     return actor.removeLayer(number)
-// }
-
 window.removeFromWhiteList = async function (canisterId, principal) {
-    const actor = nft(canisterId, {
-        agentOptions: {
-            identity,
-        },
-    });
+    var actor;
+    if (isPlug) {
+        actor = await window.ic.plug.createActor({
+            canisterId: canisterId,
+            interfaceFactory: nftIdl,
+        });
+    } else {
+        actor = nft(canisterId, {
+            agentOptions: {
+                identity,
+            },
+        });
+    }
     return actor.removeFromWhiteList(principal)
-}
-
-function stringify(obj) {
-    let cache = [];
-    let str = JSON.stringify(obj, function (key, value) {
-        if (typeof value === "object" && value !== null) {
-            if (cache.indexOf(value) !== -1) {
-                // Circular reference found, discard key
-                return;
-            }
-            // Store value in our collection
-            cache.push(value);
-        }
-        return value;
-    });
-    cache = null; // reset the cache
-    return str;
 }
