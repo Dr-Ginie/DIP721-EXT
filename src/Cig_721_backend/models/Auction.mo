@@ -9,6 +9,7 @@ module {
         mintId : Nat32;
         amount : Nat;
         token : Token;
+        icp : Nat;
     };
 
     public type AuctionRequest = {
@@ -16,5 +17,6 @@ module {
         mintId : Nat32;
         amount : Nat;
         token : Token;
+        icp : Nat;
     };
 };
