@@ -48,7 +48,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type Bid = Bid.Bid;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Token.Token;
-  private type Claim = Token.Claim;
   private type Auction = Auction.Auction;
   private type AuctionRequest = Auction.AuctionRequest;
   //private type Payee = Payee.Payee;
@@ -89,7 +88,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var offerId : Nat32 = 1;
   private stable var imageId : Nat32 = 1;
   private stable var holders = HashMap.empty<Principal, HashMap.HashMap<Nat32, Metadata>>();
-  private stable var claims = HashMap.empty<Principal, HashMap.HashMap<Text, Claim>>();
+  private stable var claims = HashMap.empty<Principal, Nat>();
   private stable var manifest = HashMap.empty<Nat32, Principal>();
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
@@ -277,6 +276,10 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     _winningBid(_mintId);
   };
 
+  public query ({ caller }) func getClaim() : async Nat {
+    _getClaim(caller);
+  };
+
   //Analytics
   public query func ownerDistribution(from : Nat, to : Nat) : async Nat32 {
     var count : Nat32 = 0;
@@ -451,6 +454,12 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
+  public shared ({ caller }) func claimSales() : async () {
+    let amount = _getClaim(caller);
+    assert (amount > 0);
+    let result = await Dip20.service(Constants.WICP_Canister).transfer(caller, amount);
+  };
+
   public shared ({ caller }) func sell(offerRequest : OfferRequest) : async () {
     assert (_isOwner(caller, offerRequest.mintId));
     await _remove(offerRequest.mintId);
@@ -520,40 +529,9 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  /*public shared ({ caller }) func bulkBuy(_mintIds : [Nat32]) : async [Nat32] {
-    var results : Buffer.Buffer<Nat32> = Buffer.fromArray([]);
-    for (_mintId in _mintIds.vals()) {
-      let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
-      let _owner = _getOwner(_mintId);
-      switch (offerRequest) {
-        case (?offerRequest) {
-          let isExpired = _isExpired(offerRequest.expiration);
-          assert (isExpired == false);
-          let currentId = offerId;
-          offerId := offerId + 1;
-          let offer = {
-            offerId = currentId;
-            mintId = offerRequest.mintId;
-            seller = _owner;
-            buyer = caller;
-            amount = offerRequest.amount;
-            token = offerRequest.token;
-            expiration = offerRequest.expiration;
-          };
-        };
-        case (null) {
-          throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
-        };
-      };
-    };
-
-    try {
-      await _buy(offer);
-    } catch (e) {
-      //throw (e);
-    };
-    Buffer.toArray(results);
-  };*/
+  public shared ({ caller }) func bulkBuy(_mintIds : [Nat32]) : async [Nat32] {
+    await _bulkBuy(caller, _mintIds);
+  };
 
   public shared ({ caller }) func makeOffer(offerRequest : OfferRequest) : async Nat32 {
     await* _makeOffer(offerRequest, caller);
@@ -602,6 +580,107 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   //////////PRIVATE METHODS/////////////////////
+
+  private func _getClaim(owner : Principal) : Nat {
+    let _claim = HashMap.get(claims, owner, pHash, pEqual);
+    switch (_claim) {
+      case (?_claim) {
+        _claim;
+      };
+      case (null) {
+        0;
+      };
+    };
+  };
+
+  private func _bulkBuy(caller : Principal, _mintIds : [Nat32]) : async [Nat32] {
+    var amount = 0;
+    var tempClaims = claims;
+    var tempOffers : Buffer.Buffer<Offer> = Buffer.fromArray([]);
+    for (_mintId in _mintIds.vals()) {
+      let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
+      let _owner = _getOwner(_mintId);
+      switch (offerRequest) {
+        case (?offerRequest) {
+          let isExpired = _isExpired(offerRequest.expiration);
+          assert (isExpired == false);
+          let offer : Offer = {
+            offerId = 0;
+            mintId = offerRequest.mintId;
+            seller = _owner;
+            buyer = caller;
+            amount = offerRequest.amount;
+            token = offerRequest.token;
+            icp = offerRequest.icp;
+            expiration = null;
+          };
+          tempOffers.add(offer);
+          await* _transfer(Principal.fromActor(this), _mintId);
+          var claimAmount = _getClaim(_owner);
+          amount := amount + offerRequest.icp;
+          claimAmount := claimAmount + offerRequest.icp;
+          tempClaims := HashMap.insert(tempClaims, _owner, pHash, pEqual, claimAmount).0;
+        };
+        case (null) {
+          throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
+        };
+      };
+    };
+    let allowance = await Dip20.service(Constants.WICP_Canister).allowance(caller, Principal.fromActor(this));
+    if (amount > allowance) throw (Error.reject("Insufficient Allowance "));
+    let royalties = Float.mul(Utils.natToFloat(amount), royalty);
+    let _amount = amount - Utils.floatToNat(royalties);
+    let result = await Dip20.service(Constants.WICP_Canister).transferFrom(caller, Principal.fromActor(this), _amount);
+    switch (result) {
+      case (#Ok(value)) {
+        let royaltyResult = await Dip20.service(Constants.WICP_Canister).transfer(collectionCreator, Utils.floatToNat(royalties));
+        claims := tempClaims;
+        for (id in _mintIds.vals()) {
+          await* _transfer(caller, id);
+          let offerRequest = HashMap.get(sales, id, n32Hash, n32Equal);
+          await _remove(id);
+          let _owner = _getOwner(id);
+          switch (offerRequest) {
+            case (?offerRequest) {
+              let currentOfferId = offerId + 1;
+              offerId := currentOfferId;
+              let offer : Offer = {
+                offerId = currentOfferId;
+                mintId = offerRequest.mintId;
+                seller = Principal.fromActor(this);
+                buyer = caller;
+                amount = offerRequest.amount;
+                token = offerRequest.token;
+                icp = offerRequest.icp;
+                expiration = null;
+              };
+              _updatePriceHistory(offer);
+            };
+            case (null) {
+              throw (Error.reject("No Data for MintId " #Nat32.toText(id)));
+            };
+          };
+        };
+        _mintIds;
+      };
+      case (#Err(value)) {
+        let _tempOffers = Buffer.toArray(tempOffers);
+        for (offer in _tempOffers.vals()) {
+          let _offerRequest = {
+            mintId  = offer.mintId;
+            amount = offer.amount;
+            token = offer.token ;
+            icp = offer.icp;
+            expiration = offer.expiration;
+          };
+          sales := HashMap.insert(sales, offer.mintId, n32Hash, n32Equal, _offerRequest).0;
+          await* _transfer(offer.seller, offer.mintId);
+        };
+        [];
+      };
+    };
+  };
+
   private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
     assert (_isWhiteList(caller));
     let currentId = mintId;
@@ -1026,6 +1105,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     assert (_allowance >= offer.amount);
     await _tokenTransferFromRoyalties(offer);
     await* _transfer(offer.buyer, offer.mintId);
+    _updatePriceHistory(offer);
   };
 
   private func _winningBid(_mintId : Nat32) : ?Offer {
