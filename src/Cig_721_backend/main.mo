@@ -466,6 +466,14 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     sales := HashMap.insert(sales, offerRequest.mintId, n32Hash, n32Equal, offerRequest).0;
   };
 
+  public shared ({ caller }) func bulkSell(_offerRequests : [OfferRequest]) : async () {
+    for(_offerRequest in _offerRequests.vals()){
+      assert (_isOwner(caller, _offerRequest.mintId));
+      await _remove(_offerRequest.mintId);
+      sales := HashMap.insert(sales, _offerRequest.mintId, n32Hash, n32Equal, _offerRequest).0;
+    };
+  };
+
   public shared ({ caller }) func bid(amount : Nat, _mintId : Nat32) : async () {
     await _bid(amount, _mintId, caller);
   };
