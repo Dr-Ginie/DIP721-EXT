@@ -30,7 +30,6 @@ import Minter "./services/Minter";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
 import Token "./models/Token";
-import Payee "./models/Payee";
 import Auction "./models/Auction";
 import CollectionRequest "./models/CollectionRequest";
 import Http "./common/http";
@@ -50,7 +49,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type Token = Token.Token;
   private type Auction = Auction.Auction;
   private type AuctionRequest = Auction.AuctionRequest;
-  //private type Payee = Payee.Payee;
   private type JSON = JSON.JSON;
   private type Attribute = Attribute.Attribute;
   private type WhiteList = WhiteList.WhiteList;
