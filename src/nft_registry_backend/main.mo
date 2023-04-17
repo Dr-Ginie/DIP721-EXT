@@ -41,7 +41,7 @@ actor class NFT_Registry(_owner : Principal) = this {
 
   private stable let owner = _owner;
   private stable var timerId : ?Nat = null;
-  private stable let registrationFee:Nat = 2000000000; 
+  private stable let registrationFee : Nat = 2000000000;
 
   public type Collection = Collection.Collection;
   public type CollectionRequest = CollectionRequest.CollectionRequest;
@@ -50,6 +50,7 @@ actor class NFT_Registry(_owner : Principal) = this {
   private stable var modclub_environment = "prod";
   private stable var ModclubRulesAdded = false;
 
+  private stable var createdCollections = HashMap.empty<Principal, [Text]>();
   private stable var collections = HashMap.empty<Text, Collection>();
   private stable var tempCollections = HashMap.empty<Text, Collection>();
   private stable var mainBannerAd : ?Ad = null;
@@ -239,15 +240,36 @@ actor class NFT_Registry(_owner : Principal) = this {
     bannerAdBid;
   };
 
-  public shared ({ caller }) func createCollection(request:CollectionRequest) : async Text {
+  public query func fetchCreatedCollections() : async [(Principal, [Text])] {
+    _fetchCreatedCollections();
+  };
+
+  public query func getCreatedCollections(creator : Principal) : async [Text] {
+    _getCreatedCollections(creator);
+  };
+
+  public shared ({ caller }) func createCollection(request : CollectionRequest) : async Text {
     Cycles.add(1_700_000_000_000);
     let canister = await Cig721.Cig721(request);
-    Principal.toText(Principal.fromActor(canister))
+    let canisterId = Principal.toText(Principal.fromActor(canister));
+    _addToCreatedCollection(caller, [canisterId]);
+    canisterId
+
+  };
+
+  public shared ({ caller }) func addToCreatedCollection(canisters : [Text]) : async () {
+    // verify that the canisters being added were created by the caller
+    _addToCreatedCollection(caller, canisters);
+  };
+
+  public shared ({ caller }) func removeFromCreatedCollection(canister : Text) : async [Text] {
+    _removeFromCreatedCollection(caller, canister);
+    _getCreatedCollections(caller);
   };
 
   public shared ({ caller }) func testRegisterCollection(collection : Collection) : async Text {
     collections := HashMap.insert(collections, collection.name, tHash, tEqual, collection).0;
-    collection.name
+    collection.name;
   };
 
   public shared ({ caller }) func registerCollection(collection : Collection) : async Text {
@@ -258,15 +280,15 @@ actor class NFT_Registry(_owner : Principal) = this {
       throw (Error.reject("Collection is name is not available"));
     };
     let allowance = await Dip20.service(Constants.WICP_Canister).allowance(caller, Principal.fromActor(this));
-    if (allowance < registrationFee) return throw(Error.reject("InsufficientAllowance"));
+    if (allowance < registrationFee) return throw (Error.reject("InsufficientAllowance"));
     let result = await Dip20.service(Constants.WICP_Canister).transferFrom(caller, Principal.fromActor(this), registrationFee);
     switch (result) {
       case (#Ok(value)) {
         tempCollections := HashMap.insert(tempCollections, collection.name, tHash, tEqual, collection).0;
-        await _submitContentToModclub(collection.canister, collection.name)
+        await _submitContentToModclub(collection.canister, collection.name);
       };
       case (#Err(value)) {
-        throw(Error.reject("Issue Transfering Funds"));
+        throw (Error.reject("Issue Transfering Funds"));
       };
     };
   };
@@ -366,14 +388,52 @@ actor class NFT_Registry(_owner : Principal) = this {
     };
   };
 
-  private func _submitContentToModclub(canisterId : Text, name:Text) : async Text {
-    let href = "https://wi732-4aaaa-aaaan-qc45a-cai.raw.ic0.app/"#canisterId;
-    await Modclub.getModclubActor(modclub_environment).submitHtmlContent(name, "<div><p>Please review <a href='"#href #"' target='_blank'>this NFT collection</a>.</p></div>", ?("" #name #" NFT Collection"));
+  private func _fetchCreatedCollections() : [(Principal, [Text])] {
+    Iter.toArray(HashMap.entries(createdCollections));
   };
 
-  public func testSubmitContentToModclub(name:Text) : async Text {
+  private func _getCreatedCollections(creator : Principal) : [Text] {
+    let exist = HashMap.get(createdCollections, creator, pHash, pEqual);
+    switch (exist) {
+      case (?exist) {
+        exist;
+      };
+      case (null) { [] };
+    };
+  };
+
+  private func _addToCreatedCollection(creator : Principal, canisters : [Text]) {
+    let exist = HashMap.get(createdCollections, creator, pHash, pEqual);
+    switch (exist) {
+      case (?exist) {
+        var _canisters = Array.append(exist, canisters);
+        createdCollections := HashMap.insert(createdCollections, creator, pHash, pEqual, _canisters).0;
+      };
+      case (null) {
+        createdCollections := HashMap.insert(createdCollections, creator, pHash, pEqual, canisters).0;
+      };
+    };
+  };
+
+  private func _removeFromCreatedCollection(creator : Principal, canister : Text) {
+    var _collections = _getCreatedCollections(creator);
+    _collections := Array.filter(
+      _collections,
+      func(e : Text) : Bool {
+        e != canister;
+      },
+    );
+    createdCollections := HashMap.insert(createdCollections, creator, pHash, pEqual, _collections).0;
+  };
+
+  private func _submitContentToModclub(canisterId : Text, name : Text) : async Text {
+    let href = "https://wi732-4aaaa-aaaan-qc45a-cai.raw.ic0.app/" #canisterId;
+    await Modclub.getModclubActor(modclub_environment).submitHtmlContent(name, "<div><p>Please review <a href='" #href # "' target='_blank'>this NFT collection</a>.</p></div>", ?("" #name # " NFT Collection"));
+  };
+
+  public func testSubmitContentToModclub(name : Text) : async Text {
     let href = "https://wi732-4aaaa-aaaan-qc45a-cai.raw.ic0.app/";
-    await Modclub.getModclubActor(modclub_environment).submitHtmlContent(name, "<div><p>Please review <a href='"#href #"' target='_blank'>this NFT collection</a>.</p></div>", ?("" #name #" NFT Collection"));
+    await Modclub.getModclubActor(modclub_environment).submitHtmlContent(name, "<div><p>Please review <a href='" #href # "' target='_blank'>this NFT collection</a>.</p></div>", ?("" #name # " NFT Collection"));
   };
 
   public shared ({ caller }) func setSubscribeCallback() : async () {
@@ -395,11 +455,11 @@ actor class NFT_Registry(_owner : Principal) = this {
 
   public shared ({ caller }) func updateModSettings() : async () {
     assert (owner == caller);
-    let settings:Modclub.ProviderSettings = {
+    let settings : Modclub.ProviderSettings = {
       minVotes = 2;
       minStaked = 5;
     };
-    await Modclub.getModclubActor(modclub_environment).updateSettings(Principal.fromActor(this),settings);
+    await Modclub.getModclubActor(modclub_environment).updateSettings(Principal.fromActor(this), settings);
   };
 
 };
