@@ -10,14 +10,16 @@ module {
         seller:Principal;
         buyer:Principal;
         amount:Nat;
-        token:Token;
+        token:?Token;
+        icp:Nat;
         expiration:?Time.Time;
     };
 
     public type OfferRequest = {
         mintId:Nat32;
         amount:Nat;
-        token:Token;
+        token:?Token;
+        icp:Nat;
         expiration:?Time.Time;
     };
 }

@@ -48,9 +48,10 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type Bid = Bid.Bid;
   private type OfferRequest = Offer.OfferRequest;
   private type Token = Token.Token;
+  private type Claim = Token.Claim;
   private type Auction = Auction.Auction;
   private type AuctionRequest = Auction.AuctionRequest;
-  private type Payee = Payee.Payee;
+  //private type Payee = Payee.Payee;
   private type JSON = JSON.JSON;
   private type Attribute = Attribute.Attribute;
   private type WhiteList = WhiteList.WhiteList;
@@ -88,6 +89,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var offerId : Nat32 = 1;
   private stable var imageId : Nat32 = 1;
   private stable var holders = HashMap.empty<Principal, HashMap.HashMap<Nat32, Metadata>>();
+  private stable var claims = HashMap.empty<Principal, HashMap.HashMap<Text, Claim>>();
   private stable var manifest = HashMap.empty<Nat32, Principal>();
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
@@ -318,7 +320,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         attributes := HashMap.insert(attributes, number, n32Hash, n32Equal, attribute).0;
       };
     };
-    "success"
+    "success";
   };
 
   public shared ({ caller }) func startMint(duration : Nat) : async () {
@@ -347,7 +349,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       seller = Principal.fromActor(this);
       buyer = recipient;
       amount = mintPrice;
-      token = #Dip20(Constants.WICP_Canister);
+      token = ?#Dip20(Constants.WICP_Canister);
+      icp = mintPrice;
       expiration = null;
     };
     if (isMinting == true) {
@@ -357,7 +360,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
       let _metadata : Metadata = {
         mintId = currentId;
-        data = await _createMetaData(description,external_url,name);
+        data = await _createMetaData(description, external_url, name);
       };
 
       //generate NFT
@@ -380,7 +383,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       seller = Principal.fromActor(this);
       buyer = recipient;
       amount = mintPrice * Nat32.toNat(count);
-      token = #Dip20(Constants.WICP_Canister);
+      token = ?#Dip20(Constants.WICP_Canister);
+      icp = mintPrice * Nat32.toNat(count);
       expiration = null;
     };
     if (isMinting == false) {
@@ -391,7 +395,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         mintId := mintId + 1;
         let _metadata : Metadata = {
           mintId = currentId;
-          data = await _createMetaData(description,external_url,name);
+          data = await _createMetaData(description, external_url, name);
         };
         _mint(_metadata, recipient);
         manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -471,6 +475,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
           mintId = auctonRequest.mintId;
           amount = auctonRequest.amount;
           token = auctonRequest.token;
+          icp = auctonRequest.icp;
         };
         auctions := HashMap.insert(auctions, auctonRequest.mintId, n32Hash, n32Equal, _auction).0;
         var timerID = setTimer(
@@ -499,6 +504,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
           buyer = caller;
           amount = offerRequest.amount;
           token = offerRequest.token;
+          icp = offerRequest.icp;
           expiration = offerRequest.expiration;
         };
         try {
@@ -516,7 +522,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   /*public shared ({ caller }) func bulkBuy(_mintIds : [Nat32]) : async [Nat32] {
     var results : Buffer.Buffer<Nat32> = Buffer.fromArray([]);
-    var payees = HashMap.empty<Principal, HashMap.HashMap<Text,[Payee]>>();
     for (_mintId in _mintIds.vals()) {
       let offerRequest = HashMap.get(sales, _mintId, n32Hash, n32Equal);
       let _owner = _getOwner(_mintId);
@@ -535,43 +540,11 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
             token = offerRequest.token;
             expiration = offerRequest.expiration;
           };
-          let exist = HashMap.get(payees, offer.seller, pHash, pEqual);
-          switch (exist) {
-            case (?exist) {
-              let payee : Payee = {
-                to = offer.seller;
-                from = offer.buyer;
-                amount = offer.amount;
-                token = offer.token;
-                mintId = offer.mintId;
-              };
-              let _exist = Array.append(exist, [payee]);
-              payees := HashMap.insert(payees, offer.seller, pHash, pEqual, _exist).0;
-            };
-            case (null) {
-              let payee : Payee = {
-                to = offer.seller;
-                from = offer.buyer;
-                amount = offer.amount;
-                token = offer.token;
-                mintId = offer.mintId;
-              };
-              switch(offer.token){
-
-              };
-              var payees = HashMap.empty<Text,[Payee]>();
-              payees := HashMap.insert(payees, offer.seller, pHash, pEqual, [payee]).0;
-            };
-          };
         };
         case (null) {
           throw (Error.reject("No Data for MintId " #Nat32.toText(_mintId)));
         };
       };
-    };
-
-    for((seller,payee) in HashMap.entries(payees)) {
-
     };
 
     try {
@@ -635,7 +608,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     mintId := mintId + 1;
     let _metadata : Metadata = {
       mintId = currentId;
-      data = await _createMetaData(description,external_url,name);
+      data = await _createMetaData(description, external_url, name);
     };
     _mint(_metadata, recipient);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -650,7 +623,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       mintId := mintId + 1;
       let _metadata : Metadata = {
         mintId = currentId;
-        data = await _createMetaData(description,external_url,name);
+        data = await _createMetaData(description, external_url, name);
       };
       _mint(_metadata, recipient);
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -866,6 +839,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
           buyer = caller;
           amount = offerRequest.amount;
           token = offerRequest.token;
+          icp = offerRequest.icp;
           expiration = offerRequest.expiration;
         };
         var _offers = await* _getOffers(offerRequest.mintId);
@@ -905,7 +879,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
           seller = _owner;
           buyer = buyer;
           amount = amount;
-          token = _auction.token;
+          token = ?_auction.token;
+          icp = _auction.icp;
           expiration = null;
         };
         switch (_winningBid) {
@@ -1059,27 +1034,34 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   private func _tokenAllowance(offer : Offer) : async Nat {
     switch (offer.token) {
-      case (#Cig20(value)) {
-        await Cig20.service(value).allowance(offer.buyer, Principal.fromActor(this));
-      };
-      case (#Dip20(value)) {
-        await Dip20.service(value).allowance(offer.buyer, Principal.fromActor(this));
-      };
-      case (#IRC2(value)) {
-        let now = Time.now();
-        let args = {
-          account = { owner = offer.buyer; subaccount = null };
-          spender = Principal.fromActor(this);
+      case (?token) {
+        switch (token) {
+          case (#Cig20(value)) {
+            await Cig20.service(value).allowance(offer.buyer, Principal.fromActor(this));
+          };
+          case (#Dip20(value)) {
+            await Dip20.service(value).allowance(offer.buyer, Principal.fromActor(this));
+          };
+          case (#IRC2(value)) {
+            let now = Time.now();
+            let args = {
+              account = { owner = offer.buyer; subaccount = null };
+              spender = Principal.fromActor(this);
 
+            };
+            let result = await ICRC2.service(value).icrc2_allowance(args);
+            let expires_at = Nat64.toNat(result.expires_at) + icrc2Buffer;
+            assert (expires_at < now);
+            result.allowance;
+
+          };
+          case (#EXT(value)) {
+            throw (Error.reject("No Implmentation"));
+          };
         };
-        let result = await ICRC2.service(value).icrc2_allowance(args);
-        let expires_at = Nat64.toNat(result.expires_at) + icrc2Buffer;
-        assert (expires_at < now);
-        result.allowance;
-
       };
-      case (#EXT(value)) {
-        throw (Error.reject("No Implmentation"));
+      case (null) {
+        await Dip20.service(Constants.WICP_Canister).allowance(offer.buyer, Principal.fromActor(this));
       };
     };
   };
@@ -1120,10 +1102,84 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     assert (offer.amount > 0);
     let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
     switch (offer.token) {
-      case (#Cig20(value)) {
+      case (?token) {
+        switch (token) {
+          case (#Cig20(value)) {
+            let _amount = offer.amount - Utils.floatToNat(royalties);
+            let result = await Cig20.service(value).transfer(to, _amount);
+            let royaltyResult = await Cig20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+          };
+          case (#Dip20(value)) {
+            let _amount = offer.amount - Utils.floatToNat(royalties);
+            let result = await Dip20.service(value).transfer(to, _amount);
+            let royaltyResult = await Dip20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+          };
+          case (#IRC2(value)) {
+            let _amount = offer.amount - Utils.floatToNat(royalties);
+            let now = Time.now();
+
+            let from = { owner = offer.seller; subaccount = null };
+            let to = { owner = offer.buyer; subaccount = null };
+            let toRoyalties = { owner = collectionCreator; subaccount = null };
+
+            let args : ICRC2.TransferArgs = {
+              from = from;
+              to = to;
+              amount = _amount;
+              fee = 0;
+              memo = Text.encodeUtf8("");
+              created_at_time = 0;
+
+            };
+
+            let argsRoyalties : ICRC2.TransferArgs = {
+              from = from;
+              to = toRoyalties;
+              amount = Utils.floatToNat(royalties);
+              fee = 0;
+              memo = Text.encodeUtf8("");
+              created_at_time = 0;
+
+            };
+
+            let result = await ICRC2.service(value).icrc2_transfer_from(args);
+            let royaltyResult = await ICRC2.service(value).icrc2_transfer_from(argsRoyalties);
+
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+
+          };
+          case (#EXT(value)) {
+            throw (Error.reject("No Implmentation"));
+          };
+        };
+      };
+      case (null) {
         let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Cig20.service(value).transfer(to, _amount);
-        let royaltyResult = await Cig20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
+        let result = await Dip20.service(Constants.WICP_Canister).transfer(to, _amount);
+        let royaltyResult = await Dip20.service(Constants.WICP_Canister).transfer(collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
 
@@ -1132,63 +1188,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
             throw (Error.reject("Token Transfer Error"));
           };
         };
-      };
-      case (#Dip20(value)) {
-        let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Dip20.service(value).transfer(to, _amount);
-        let royaltyResult = await Dip20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
-        switch (result) {
-          case (#Ok(value)) {
-
-          };
-          case (#Err(value)) {
-            throw (Error.reject("Token Transfer Error"));
-          };
-        };
-      };
-      case (#IRC2(value)) {
-        let _amount = offer.amount - Utils.floatToNat(royalties);
-        let now = Time.now();
-
-        let from = { owner = offer.seller; subaccount = null };
-        let to = { owner = offer.buyer; subaccount = null };
-        let toRoyalties = { owner = collectionCreator; subaccount = null };
-
-        let args : ICRC2.TransferArgs = {
-          from = from;
-          to = to;
-          amount = _amount;
-          fee = 0;
-          memo = Text.encodeUtf8("");
-          created_at_time = 0;
-
-        };
-
-        let argsRoyalties : ICRC2.TransferArgs = {
-          from = from;
-          to = toRoyalties;
-          amount = Utils.floatToNat(royalties);
-          fee = 0;
-          memo = Text.encodeUtf8("");
-          created_at_time = 0;
-
-        };
-
-        let result = await ICRC2.service(value).icrc2_transfer_from(args);
-        let royaltyResult = await ICRC2.service(value).icrc2_transfer_from(argsRoyalties);
-
-        switch (result) {
-          case (#Ok(value)) {
-
-          };
-          case (#Err(value)) {
-            throw (Error.reject("Token Transfer Error"));
-          };
-        };
-
-      };
-      case (#EXT(value)) {
-        throw (Error.reject("No Implmentation"));
       };
     };
   };
@@ -1196,8 +1195,65 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private func _tokenTransferFrom(offer : Offer) : async () {
     assert (offer.amount > 0);
     switch (offer.token) {
-      case (#Cig20(value)) {
-        let result = await Cig20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
+      case (?token) {
+        switch (token) {
+          case (#Cig20(value)) {
+            let result = await Cig20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+          };
+          case (#Dip20(value)) {
+            let result = await Dip20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+          };
+          case (#IRC2(value)) {
+            let now = Time.now();
+
+            let from = { owner = offer.buyer; subaccount = null };
+            let to = { owner = Principal.fromActor(this); subaccount = null };
+            let toRoyalties = { owner = collectionCreator; subaccount = null };
+
+            let args : ICRC2.TransferArgs = {
+              from = from;
+              to = to;
+              amount = offer.amount;
+              fee = 0;
+              memo = Text.encodeUtf8("");
+              created_at_time = 0;
+
+            };
+
+            let result = await ICRC2.service(value).icrc2_transfer_from(args);
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+
+          };
+          case (#EXT(value)) {
+            throw (Error.reject("No Implmentation"));
+          };
+        };
+      };
+      case (null) {
+        let result = await Dip20.service(Constants.WICP_Canister).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
         switch (result) {
           case (#Ok(value)) {
 
@@ -1206,48 +1262,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
             throw (Error.reject("Token Transfer Error"));
           };
         };
-      };
-      case (#Dip20(value)) {
-        let result = await Dip20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
-        switch (result) {
-          case (#Ok(value)) {
-
-          };
-          case (#Err(value)) {
-            throw (Error.reject("Token Transfer Error"));
-          };
-        };
-      };
-      case (#IRC2(value)) {
-        let now = Time.now();
-
-        let from = { owner = offer.buyer; subaccount = null };
-        let to = { owner = Principal.fromActor(this); subaccount = null };
-        let toRoyalties = { owner = collectionCreator; subaccount = null };
-
-        let args : ICRC2.TransferArgs = {
-          from = from;
-          to = to;
-          amount = offer.amount;
-          fee = 0;
-          memo = Text.encodeUtf8("");
-          created_at_time = 0;
-
-        };
-
-        let result = await ICRC2.service(value).icrc2_transfer_from(args);
-        switch (result) {
-          case (#Ok(value)) {
-
-          };
-          case (#Err(value)) {
-            throw (Error.reject("Token Transfer Error"));
-          };
-        };
-
-      };
-      case (#EXT(value)) {
-        throw (Error.reject("No Implmentation"));
       };
     };
   };
@@ -1256,10 +1270,82 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     assert (offer.amount > 0);
     let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
     switch (offer.token) {
-      case (#Cig20(value)) {
+      case (?token) {
+        switch (token) {
+          case (#Cig20(value)) {
+            let _amount = offer.amount - Utils.floatToNat(royalties);
+            let result = await Cig20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
+            let royaltyResult = await Cig20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+          };
+          case (#Dip20(value)) {
+            let _amount = offer.amount - Utils.floatToNat(royalties);
+            let result = await Dip20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
+            let royaltyResult = await Dip20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+          };
+          case (#IRC2(value)) {
+            let now = Time.now();
+
+            let from = { owner = offer.buyer; subaccount = null };
+            let to = { owner = Principal.fromActor(this); subaccount = null };
+            let toRoyalties = { owner = collectionCreator; subaccount = null };
+
+            let args : ICRC2.TransferArgs = {
+              from = from;
+              to = to;
+              amount = offer.amount;
+              fee = 0;
+              memo = Text.encodeUtf8("");
+              created_at_time = 0;
+
+            };
+
+            let argsRoyalties : ICRC2.TransferArgs = {
+              from = from;
+              to = toRoyalties;
+              amount = Utils.floatToNat(royalties);
+              fee = 0;
+              memo = Text.encodeUtf8("");
+              created_at_time = 0;
+
+            };
+
+            let result = await ICRC2.service(value).icrc2_transfer_from(args);
+            let royaltyResult = await ICRC2.service(value).icrc2_transfer_from(argsRoyalties);
+            switch (result) {
+              case (#Ok(value)) {
+
+              };
+              case (#Err(value)) {
+                throw (Error.reject("Token Transfer Error"));
+              };
+            };
+
+          };
+          case (#EXT(value)) {
+            throw (Error.reject("No Implmentation"));
+          };
+        };
+      };
+      case (null) {
         let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Cig20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
-        let royaltyResult = await Cig20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
+        let result = await Dip20.service(Constants.WICP_Canister).transferFrom(offer.buyer, offer.seller, _amount);
+        let royaltyResult = await Dip20.service(Constants.WICP_Canister).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
         switch (result) {
           case (#Ok(value)) {
 
@@ -1268,61 +1354,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
             throw (Error.reject("Token Transfer Error"));
           };
         };
-      };
-      case (#Dip20(value)) {
-        let _amount = offer.amount - Utils.floatToNat(royalties);
-        let result = await Dip20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
-        let royaltyResult = await Dip20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
-        switch (result) {
-          case (#Ok(value)) {
-
-          };
-          case (#Err(value)) {
-            throw (Error.reject("Token Transfer Error"));
-          };
-        };
-      };
-      case (#IRC2(value)) {
-        let now = Time.now();
-
-        let from = { owner = offer.buyer; subaccount = null };
-        let to = { owner = Principal.fromActor(this); subaccount = null };
-        let toRoyalties = { owner = collectionCreator; subaccount = null };
-
-        let args : ICRC2.TransferArgs = {
-          from = from;
-          to = to;
-          amount = offer.amount;
-          fee = 0;
-          memo = Text.encodeUtf8("");
-          created_at_time = 0;
-
-        };
-
-        let argsRoyalties : ICRC2.TransferArgs = {
-          from = from;
-          to = toRoyalties;
-          amount = Utils.floatToNat(royalties);
-          fee = 0;
-          memo = Text.encodeUtf8("");
-          created_at_time = 0;
-
-        };
-
-        let result = await ICRC2.service(value).icrc2_transfer_from(args);
-        let royaltyResult = await ICRC2.service(value).icrc2_transfer_from(argsRoyalties);
-        switch (result) {
-          case (#Ok(value)) {
-
-          };
-          case (#Err(value)) {
-            throw (Error.reject("Token Transfer Error"));
-          };
-        };
-
-      };
-      case (#EXT(value)) {
-        throw (Error.reject("No Implmentation"));
       };
     };
   };
@@ -1387,21 +1418,21 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
     };
   };
-  private func _createMetaData(description:Text,external_url:Text,name:Text) : async Blob {
+  private func _createMetaData(description : Text, external_url : Text, name : Text) : async Blob {
     let _attributes = await _roll();
     let image = await _composeImage(_attributes);
     let currentImageId = imageId;
     let _currentImageId = Nat32.toText(currentImageId);
     imageId := imageId + 1;
     let canisterId = Principal.toText(Principal.fromActor(this));
-    let imageUrl = "https://" #canisterId #".raw.ic0.app/image" #_currentImageId;
+    let imageUrl = "https://" #canisterId # ".raw.ic0.app/image" #_currentImageId;
     images := HashMap.insert(images, currentImageId, n32Hash, n32Equal, image).0;
-    let metaData = Utils.createMetaData(description,external_url,imageUrl,name,_attributes);
+    let metaData = Utils.createMetaData(description, external_url, imageUrl, name, _attributes);
     let json = JSON.show(metaData);
-    Text.encodeUtf8(json)
+    Text.encodeUtf8(json);
   };
 
-  private func _composeImage(_attributes:[Attribute]) : async Blob {
+  private func _composeImage(_attributes : [Attribute]) : async Blob {
     let _layers : Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
     for (attribute in _attributes.vals()) {
       switch (attribute.layer) {
