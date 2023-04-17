@@ -23,6 +23,7 @@ import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 import Ad "models/Ad";
 import Collection "models/Collection";
 import Dip20 "Dip20";
+import NFT "NFT";
 import Constants "../Constants";
 import Modclub "modclub";
 import Cig721 "../Cig_721_backend/main";
@@ -257,9 +258,11 @@ actor class NFT_Registry(_owner : Principal) = this {
 
   };
 
-  public shared ({ caller }) func addToCreatedCollection(canisters : [Text]) : async () {
+  public shared ({ caller }) func addToCreatedCollection(canister : Text) : async () {
     // verify that the canisters being added were created by the caller
-    _addToCreatedCollection(caller, canisters);
+    let creator = await NFT.service(canister).getCollectionCreator();
+    assert(caller == creator);
+    _addToCreatedCollection(caller, [canister]);
   };
 
   public shared ({ caller }) func removeFromCreatedCollection(canister : Text) : async [Text] {
