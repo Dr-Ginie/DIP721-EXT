@@ -1,1 +1,1 @@
-{ dependencies = [ "base","json", "stable","stable-buffer" ], compiler = Some "0.7.6" }
+{ dependencies = [ "base","json", "stable","stable-buffer", "easy-random" ], compiler = Some "0.7.6" }

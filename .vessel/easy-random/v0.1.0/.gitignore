@@ -1,0 +1,4 @@
+.DS_Store
+.vessel
+*.wasm
+docs/

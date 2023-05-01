@@ -38,6 +38,8 @@ import WhiteList "./models/WhiteList";
 import Constants "../Constants";
 import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 import Random "mo:base/Random";
+import Option "mo:base/Option";
+import Int "mo:base/Int";
 
 actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = this {
 
@@ -69,15 +71,15 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
   private stable let external_url = collectionRequest.external_url;
-  private stable let canvasWidth = collectionRequest.canvasWidth;
-  private stable let canvasHeight = collectionRequest.canvasHeight;
+  private  let canvasWidth = collectionRequest.canvasWidth;
+  private  let canvasHeight = collectionRequest.canvasHeight;
   private stable var mintPrice = 0;
   private stable let description = collectionRequest.description;
   private stable let banner = collectionRequest.bannerImage;
   private stable let profile = collectionRequest.profileImage;
   private stable var isMinting = false;
   private stable var isWhiteListMinting = false;
-  private stable var minterCanisterId = "";
+  private var minterCanisterId = "xsclo-2qaaa-aaaan-qdkvq-cai";
 
   private var capacity = 1000000000000000000;
   private var cyclesBalance = Cycles.balance();
@@ -344,6 +346,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   public shared ({ caller }) func mint(recipient : Principal) : async Nat32 {
+    isMinting := true;
     let tempOffer : Offer = {
       offerId = 0;
       mintId = 0;
@@ -355,13 +358,13 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       expiration = null;
     };
     if (isMinting == true) {
-      await _tokenTransferFrom(tempOffer);
+      //await _tokenTransferFrom(tempOffer);
       let currentId = mintId;
       mintId := mintId + 1;
 
       let _metadata : Metadata = {
         mintId = currentId;
-        data = await _createMetaData(description, external_url, name);
+        data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
       };
 
       //generate NFT
@@ -396,7 +399,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         mintId := mintId + 1;
         let _metadata : Metadata = {
           mintId = currentId;
-          data = await _createMetaData(description, external_url, name);
+          data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
         };
         _mint(_metadata, recipient);
         manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -465,7 +468,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   public shared ({ caller }) func bulkSell(_offerRequests : [OfferRequest]) : async () {
-    for(_offerRequest in _offerRequests.vals()){
+    for (_offerRequest in _offerRequests.vals()) {
       assert (_isOwner(caller, _offerRequest.mintId));
       await _remove(_offerRequest.mintId);
       sales := HashMap.insert(sales, _offerRequest.mintId, n32Hash, n32Equal, _offerRequest).0;
@@ -673,9 +676,9 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         let _tempOffers = Buffer.toArray(tempOffers);
         for (offer in _tempOffers.vals()) {
           let _offerRequest = {
-            mintId  = offer.mintId;
+            mintId = offer.mintId;
             amount = offer.amount;
-            token = offer.token ;
+            token = offer.token;
             icp = offer.icp;
             expiration = offer.expiration;
           };
@@ -693,7 +696,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     mintId := mintId + 1;
     let _metadata : Metadata = {
       mintId = currentId;
-      data = await _createMetaData(description, external_url, name);
+      data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
     };
     _mint(_metadata, recipient);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -708,7 +711,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       mintId := mintId + 1;
       let _metadata : Metadata = {
         mintId = currentId;
-        data = await _createMetaData(description, external_url, name);
+        data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
       };
       _mint(_metadata, recipient);
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
@@ -1459,59 +1462,48 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _roll() : async [Attribute] {
+  private func _roll(entropy : Blob) : [Attribute] {
     var results : Buffer.Buffer<Attribute> = Buffer.fromArray([]);
     for ((key, _attributes) in HashMap.entries(attributes)) {
-      let result = await _pickWeighted(_attributes);
+      let result = _pickWeighted(entropy, _attributes);
       results.add(result);
     };
     Buffer.toArray(results);
   };
 
-  private func _pickWeighted(options : [Attribute]) : async Attribute {
+  private func _pickWeighted(entropy : Blob, options : [Attribute]) : Attribute {
+    let finite = Random.Finite(entropy);
     var weightSum : Nat32 = 0;
     var vistedWeight : Nat32 = 0;
-    var _option : ?Attribute = null;
     for (option in options.vals()) {
       weightSum := weightSum + option.weight;
     };
-
-    let r = await _randomRange(0, weightSum);
-    switch (r) {
+    let randomFromZeroToNine : ?Nat = _nextNat(finite, Nat32.toNat(weightSum));
+    switch (randomFromZeroToNine) {
       case (?r) {
         for (option in options.vals()) {
           vistedWeight := vistedWeight + option.weight;
-          if (_option == null) {
-            if (r <= vistedWeight) {
-              _option := ?option;
-            } else {
-              _option := ?(await _pickWeighted(options));
-            };
+          if (Nat32.fromNat(r) <= vistedWeight) {
+            return option;
+          } else {
+            return options[0];
           };
         };
       };
       case (null) {
-        _option := ?(await _pickWeighted(options));
+        return options[0];
       };
     };
-
-    switch (_option) {
-      case (?_option) {
-        return _option;
-      };
-      case (null) {
-        await _pickWeighted(options);
-      };
-    };
+    return options[0];
   };
-  private func _createMetaData(description : Text, external_url : Text, name : Text) : async Blob {
-    let _attributes = await _roll();
-    let image = await _composeImage(_attributes);
+  private func _createMetaData(entropy : Blob, description : Text, external_url : Text, name : Text) : async Blob {
+    let _attributes = _roll(entropy);
+    let image = await composeImage();
     let currentImageId = imageId;
     let _currentImageId = Nat32.toText(currentImageId);
     imageId := imageId + 1;
     let canisterId = Principal.toText(Principal.fromActor(this));
-    let imageUrl = "https://" #canisterId # ".raw.ic0.app/image" #_currentImageId;
+    let imageUrl = "https://" #canisterId # ".raw.ic0.app/image/" #_currentImageId;
     images := HashMap.insert(images, currentImageId, n32Hash, n32Equal, image).0;
     let metaData = Utils.createMetaData(description, external_url, imageUrl, name, _attributes);
     let json = JSON.show(metaData);
@@ -1530,6 +1522,63 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         };
       };
     };
+    let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers), canvasWidth, canvasHeight);
+    Blob.fromArray(bytes);
+  };
+
+  private func composeImage() : async Blob {
+    let number : Nat32 = 0;
+    let number1 : Nat32 = 1;
+    let number2 : Nat32 = 2;
+    let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
+    let exist2 = HashMap.get(attributes, number1, n32Hash, n32Equal);
+    let exist3 = HashMap.get(attributes, number2, n32Hash, n32Equal);
+    let _layers : Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
+    switch (exist) {
+      case (?exist) {
+        switch (exist[0].layer) {
+          case (?layer) {
+            _layers.add(Blob.toArray(layer.value));
+          };
+          case (null) {
+
+          };
+        };
+      };
+      case (null) {
+
+      };
+    };
+    switch (exist2) {
+      case (?exist2) {
+        switch (exist2[0].layer) {
+          case (?layer) {
+            _layers.add(Blob.toArray(layer.value));
+          };
+          case (null) {
+
+          };
+        };
+      };
+      case (null) {
+
+      };
+    };
+    /*switch (exist3) {
+      case (?exist3) {
+        switch (exist3[0].layer) {
+          case (?layer) {
+            _layers.add(Blob.toArray(layer.value));
+          };
+          case (null) {
+
+          };
+        };
+      };
+      case (null) {
+
+      };
+    };*/
     let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers), canvasWidth, canvasHeight);
     Blob.fromArray(bytes);
   };
@@ -1557,6 +1606,24 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     assert (deposit == accepted);
     cyclesBalance += accepted;
     { accepted = Nat64.fromNat(accepted) };
+  };
+
+  private func _nextNat(finite : Random.Finite, max : Nat) : ?Nat {
+    // Find out the 2 pow that fits [max]
+    let sqrt = Float.sqrt(Float.fromInt(max + 1));
+    let exponent = Float.toInt(Float.ceil(sqrt));
+
+    // Get a random number inside that range
+    let optionRandom = finite.range(Nat8.fromIntWrap(exponent));
+    if (optionRandom == null) {
+      // Entropy finished
+      return null;
+    };
+    let randomNumber = Option.get(optionRandom, 0);
+
+    // Found random number inside [0-max] range
+    var maxRandomNumber = Int.abs(Float.toInt(Float.pow(2, Float.fromInt(exponent))));
+    ?((randomNumber * (max + 1)) / maxRandomNumber);
   };
 
 };

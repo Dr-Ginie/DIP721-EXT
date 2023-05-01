@@ -36,6 +36,12 @@ let packages = [
   , version = "v0.1.2"
   , dependencies = [ "base", "encoding", "io" ]
   },
+  {
+    name = "easy-random",
+    repo = "https://github.com/neokree/easy-random",
+    version = "v0.1.0",
+    dependencies = [ "base" ]
+  },
   { name = "base"
   , repo = "https://github.com/dfinity/motoko-base"
   , version = "7522808e315cd89e70096488728c24bec09576af" -- Motoko 0.7.6
