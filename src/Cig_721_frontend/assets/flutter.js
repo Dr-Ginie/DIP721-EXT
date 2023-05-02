@@ -353,12 +353,12 @@ _flutter.loader = null;
 
       // The FlutterServiceWorkerLoader instance could be injected as a dependency
       // (and dynamically imported from a module if not present).
-      /*const serviceWorkerLoader = new FlutterServiceWorkerLoader();
+      const serviceWorkerLoader = new FlutterServiceWorkerLoader();
       serviceWorkerLoader.setTrustedTypesPolicy(flutterTT.policy);
       await serviceWorkerLoader.loadServiceWorker(serviceWorker).catch(e => {
         // Regardless of what happens with the injection of the SW, the show must go on
         console.warn("Exception while loading service worker:", e);
-      });*/
+      });
 
       // The FlutterEntrypointLoader instance could be injected as a dependency
       // (and dynamically imported from a module if not present).
