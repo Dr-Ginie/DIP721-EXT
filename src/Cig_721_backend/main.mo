@@ -71,8 +71,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable let royalty = collectionRequest.royalty;
   private stable let name = collectionRequest.name;
   private stable let external_url = collectionRequest.external_url;
-  private  let canvasWidth = collectionRequest.canvasWidth;
-  private  let canvasHeight = collectionRequest.canvasHeight;
+  private let canvasWidth = collectionRequest.canvasWidth;
+  private let canvasHeight = collectionRequest.canvasHeight;
   private stable var mintPrice = 0;
   private stable let description = collectionRequest.description;
   private stable let banner = collectionRequest.bannerImage;
@@ -294,6 +294,11 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   //////////Update Methods///////////
+  public shared ({ caller }) func putBlob(blob : Blob) : async () {
+    images := HashMap.insert(images, imageId, n32Hash, n32Equal, blob).0;
+    imageId := imageId + 1;
+  };
+
   public shared ({ caller }) func removeAttribute(number : Nat32) : async () {
     assert (caller == collectionOwner);
     assert (isMinting == false);
@@ -353,7 +358,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       seller = Principal.fromActor(this);
       buyer = recipient;
       amount = mintPrice;
-      token = ?#Dip20(Constants.WICP_Canister);
+      token = ? #Dip20(Constants.WICP_Canister);
       icp = mintPrice;
       expiration = null;
     };
@@ -387,7 +392,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       seller = Principal.fromActor(this);
       buyer = recipient;
       amount = mintPrice * Nat32.toNat(count);
-      token = ?#Dip20(Constants.WICP_Canister);
+      token = ? #Dip20(Constants.WICP_Canister);
       icp = mintPrice * Nat32.toNat(count);
       expiration = null;
     };
@@ -1356,7 +1361,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   private func _tokenTransferFromRoyalties(offer : Offer) : async () {
-    assert (offer.amount > 0);
     let royalties = Float.mul(Utils.natToFloat(offer.amount), royalty);
     switch (offer.token) {
       case (?token) {
@@ -1496,16 +1500,49 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
     return options[0];
   };
+
+  private func _randomImage(entropy : Blob) : async* (image:Blob,id:Nat32) {
+    let finite = Random.Finite(entropy);
+    let num : ?Nat = _nextNat(finite, images.size);
+    switch (num) {
+      case (?num) {
+        if (num == 0) {
+          let _num = Nat32.fromNat(1);
+          let exist = HashMap.get(images, _num, n32Hash, n32Equal);
+          switch (exist) {
+            case (?exist) (exist,_num);
+            case (null) throw (Error.reject("Image Not Found"));
+          };
+        } else {
+          let _num = Nat32.fromNat(num);
+          let exist = HashMap.get(images, _num, n32Hash, n32Equal);
+          switch (exist) {
+            case (?exist) (exist,_num);
+            case (null) throw (Error.reject("Image Not Found"));
+          };
+        };
+      };
+      case (null) {
+        let _num = Nat32.fromNat(1);
+        let exist = HashMap.get(images, _num, n32Hash, n32Equal);
+        switch (exist) {
+          case (?exist) (exist,_num);
+          case (null) throw (Error.reject("Image Not Found"));
+        };
+      };
+    };
+  };
+
   private func _createMetaData(entropy : Blob, description : Text, external_url : Text, name : Text) : async Blob {
-    let _attributes = _roll(entropy);
-    let image = await composeImage();
+    //let _attributes = _roll(entropy);
+    let image = await* _randomImage(entropy);
     let currentImageId = imageId;
-    let _currentImageId = Nat32.toText(currentImageId);
+    let _currentImageId = Nat32.toText(image.1);
     imageId := imageId + 1;
     let canisterId = Principal.toText(Principal.fromActor(this));
     let imageUrl = "https://" #canisterId # ".raw.ic0.app/image/" #_currentImageId;
-    images := HashMap.insert(images, currentImageId, n32Hash, n32Equal, image).0;
-    let metaData = Utils.createMetaData(description, external_url, imageUrl, name, _attributes);
+    //images := HashMap.insert(images, currentImageId, n32Hash, n32Equal, image.0).0;
+    let metaData = Utils.createMetaData(description, external_url, imageUrl, name, []);
     let json = JSON.show(metaData);
     Text.encodeUtf8(json);
   };

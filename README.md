@@ -1,7 +1,7 @@
 
 **deploy commands**
 DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy --network ic Cig_721_backend --argument '(record {
-        collectionCreator = "nwhj3-domm4-4sjbd-ndrhf-rh64h-ebnyb-hjiz3-ilyjy-i22nv-jwndr-vae";
+        collectionCreator = "i47jd-kewyq-vcner-l4xf7-edf77-aw4xp-u2kpb-2qai2-6ie7k-tcngl-oqe";
         external_url = "https://www.youtube.com/";
         royalty = 2.0;
         name = "Collection name";
@@ -14,7 +14,7 @@ DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy --network ic Cig_721_backend --argum
 
 **reisntall commands**
 DFX_MOC_PATH="$(vessel bin)/moc" dfx canister --network ic install Cig_721_backend --argument '(record {
-        collectionCreator = "nwhj3-domm4-4sjbd-ndrhf-rh64h-ebnyb-hjiz3-ilyjy-i22nv-jwndr-vae";
+        collectionCreator = "i47jd-kewyq-vcner-l4xf7-edf77-aw4xp-u2kpb-2qai2-6ie7k-tcngl-oqe";
         external_url = "https://www.youtube.com/";
         royalty = 2.0;
         name = "Collection name";
