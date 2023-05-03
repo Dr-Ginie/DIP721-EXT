@@ -294,9 +294,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   //////////Update Methods///////////
-  public shared ({ caller }) func putBlob(blob : Blob) : async () {
-    images := HashMap.insert(images, imageId, n32Hash, n32Equal, blob).0;
-    imageId := imageId + 1;
+  public shared ({ caller }) func putBlob(id:Nat32, blob : Blob) : async () {
+    images := HashMap.insert(images, id, n32Hash, n32Equal, blob).0;
   };
 
   public shared ({ caller }) func removeAttribute(number : Nat32) : async () {
@@ -350,8 +349,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     mintPrice := value;
   };
 
-  public shared ({ caller }) func mint(recipient : Principal) : async Nat32 {
-    isMinting := true;
+  public shared ({ caller }) func mint(recipient : Principal) : async [Nat32] {
+    var mintIds:Buffer.Buffer<Nat32> = Buffer.fromArray([]);
     let tempOffer : Offer = {
       offerId = 0;
       mintId = 0;
@@ -362,30 +361,29 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       icp = mintPrice;
       expiration = null;
     };
+    
     if (isMinting == true) {
-      //await _tokenTransferFrom(tempOffer);
-      let currentId = mintId;
-      mintId := mintId + 1;
-
-      let _metadata : Metadata = {
-        mintId = currentId;
-        data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
-      };
-
-      //generate NFT
-
-      _mint(_metadata, recipient);
-      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-      currentId;
-    } else if (isWhiteListMinting == true) {
       await _tokenTransferFrom(tempOffer);
-      await _whiteListMint(caller, recipient);
+      for ((key, value) in HashMap.entries(images)) {
+        let currentId = mintId;
+        let _metadata : Metadata = {
+          mintId = currentId;
+          data = _createMetaData(description, external_url, name,key);
+        };
+
+        //generate NFT
+        _mint(_metadata, recipient);
+        manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+        mintIds.add(mintId);
+        mintId := mintId + 1;
+      };
+      Buffer.toArray(mintIds)
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
   };
 
-  public shared ({ caller }) func bulkMint(count : Nat32, recipient : Principal) : async [Nat32] {
+  /*public shared ({ caller }) func bulkMint(count : Nat32, recipient : Principal) : async [Nat32] {
     let tempOffer : Offer = {
       offerId = 0;
       mintId = 0;
@@ -417,7 +415,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
-  };
+  };*/
 
   public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
@@ -695,7 +693,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
+  /*private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
     assert (_isWhiteList(caller));
     let currentId = mintId;
     mintId := mintId + 1;
@@ -706,9 +704,9 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     _mint(_metadata, recipient);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
     currentId;
-  };
+  };*/
 
-  private func _whiteListbulkMint(caller : Principal, count : Nat32, recipient : Principal) : async [Nat32] {
+  /*private func _whiteListbulkMint(caller : Principal, count : Nat32, recipient : Principal) : async [Nat32] {
     assert (_isWhiteList(caller));
     var result : [Nat32] = [];
     for (j in Iter.range(0, Nat32.toNat(count))) {
@@ -723,7 +721,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       result := Array.append(result, [currentId]);
     };
     result;
-  };
+  };*/
 
   private func _startWhiteListMinting(duration : Nat) : async () {
     var _whiteList = List.fromArray(whiteList);
@@ -1501,7 +1499,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     return options[0];
   };
 
-  private func _randomImage(entropy : Blob) : async* (image:Blob,id:Nat32) {
+  private func _randomImage(entropy : Blob) : async* (image : Blob, id : Nat32) {
     let finite = Random.Finite(entropy);
     let num : ?Nat = _nextNat(finite, images.size);
     switch (num) {
@@ -1510,14 +1508,14 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
           let _num = Nat32.fromNat(1);
           let exist = HashMap.get(images, _num, n32Hash, n32Equal);
           switch (exist) {
-            case (?exist) (exist,_num);
+            case (?exist)(exist, _num);
             case (null) throw (Error.reject("Image Not Found"));
           };
         } else {
           let _num = Nat32.fromNat(num);
           let exist = HashMap.get(images, _num, n32Hash, n32Equal);
           switch (exist) {
-            case (?exist) (exist,_num);
+            case (?exist)(exist, _num);
             case (null) throw (Error.reject("Image Not Found"));
           };
         };
@@ -1526,22 +1524,18 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         let _num = Nat32.fromNat(1);
         let exist = HashMap.get(images, _num, n32Hash, n32Equal);
         switch (exist) {
-          case (?exist) (exist,_num);
+          case (?exist)(exist, _num);
           case (null) throw (Error.reject("Image Not Found"));
         };
       };
     };
   };
 
-  private func _createMetaData(entropy : Blob, description : Text, external_url : Text, name : Text) : async Blob {
+  private func _createMetaData(description : Text, external_url : Text, name : Text, image : Nat32) : Blob {
     //let _attributes = _roll(entropy);
-    let image = await* _randomImage(entropy);
-    let currentImageId = imageId;
-    let _currentImageId = Nat32.toText(image.1);
-    imageId := imageId + 1;
+    let _currentImageId = Nat32.toText(image);
     let canisterId = Principal.toText(Principal.fromActor(this));
     let imageUrl = "https://" #canisterId # ".raw.ic0.app/image/" #_currentImageId;
-    //images := HashMap.insert(images, currentImageId, n32Hash, n32Equal, image.0).0;
     let metaData = Utils.createMetaData(description, external_url, imageUrl, name, []);
     let json = JSON.show(metaData);
     Text.encodeUtf8(json);
