@@ -7,16 +7,6 @@
     "nft_registry_backend": {
       "main": "src/nft_registry_backend/main.mo",
       "type": "motoko"
-    },
-    "Cig_721_frontend": {
-      "frontend": {
-        "entrypoint": "src/Cig_721_frontend/src/assets/main.dart.js"
-      },
-      "source": [
-        "src/Cig_721_frontend/assets",
-        "dist/Cig_721_frontend/"
-      ],
-      "type": "assets"
     }
   },
   "defaults": {

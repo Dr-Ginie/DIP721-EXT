@@ -52,7 +52,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type Auction = Auction.Auction;
   private type AuctionRequest = Auction.AuctionRequest;
   private type JSON = JSON.JSON;
-  private type Attribute = Attribute.Attribute;
   private type WhiteList = WhiteList.WhiteList;
 
   let pHash = Principal.hash;
@@ -73,7 +72,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable let external_url = collectionRequest.external_url;
   private let canvasWidth = collectionRequest.canvasWidth;
   private let canvasHeight = collectionRequest.canvasHeight;
-  private stable var mintPrice = 0;
   private stable let description = collectionRequest.description;
   private stable let banner = collectionRequest.bannerImage;
   private stable let profile = collectionRequest.profileImage;
@@ -98,7 +96,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
   private stable var winningBids = HashMap.empty<Nat32, Offer>();
   private stable var priceHistory = HashMap.empty<Nat32, StableBuffer.StableBuffer<Price>>();
-  private stable var attributes = HashMap.empty<Nat32, [Attribute]>();
   private stable var whiteList : [WhiteList] = [];
   private stable var currentWhiteList : ?WhiteList = null;
   private stable var images = HashMap.empty<Nat32, Blob>();
@@ -158,24 +155,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       case (null) {
         throw (Error.reject("Not Found"));
       };
-    };
-  };
-
-  public query func fetchAttributes() : async [[Attribute]] {
-    var _attributes : [[Attribute]] = [];
-    for ((number, attribute) in HashMap.entries(attributes)) {
-      _attributes := Array.append(_attributes, [attribute]);
-    };
-    _attributes;
-  };
-
-  public query func getAttribute(number : Nat32) : async [Attribute] {
-    let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
-    switch (exist) {
-      case (?exist) {
-        exist;
-      };
-      case (null) { [] };
     };
   };
 
@@ -294,41 +273,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   //////////Update Methods///////////
-  public shared ({ caller }) func putBlob(id:Nat32, blob : Blob) : async () {
-    images := HashMap.insert(images, id, n32Hash, n32Equal, blob).0;
-  };
-
-  public shared ({ caller }) func removeAttribute(number : Nat32) : async () {
-    assert (caller == collectionOwner);
-    assert (isMinting == false);
-    assert (isWhiteListMinting == false);
-    var _number : Nat32 = 1;
-    let tempAttributes = HashMap.remove(attributes, number, n32Hash, n32Equal).0;
-    var newAttributes = HashMap.empty<Nat32, [Attribute]>();
-    for ((key, attribute) in HashMap.entries(tempAttributes)) {
-      newAttributes := HashMap.insert(newAttributes, _number, n32Hash, n32Equal, attribute).0;
-      _number := _number + 1;
-
-    };
-    attributes := newAttributes;
-  };
-
-  public shared ({ caller }) func addAttribute(number : Nat32, attribute : [Attribute]) : async Text {
-    //assert (caller == collectionOwner);
-    assert (isMinting == false);
-    assert (isWhiteListMinting == false);
-    let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
-    switch (exist) {
-      case (?exist) {
-        let _attribute = Array.append(exist, attribute);
-        attributes := HashMap.insert(attributes, number, n32Hash, n32Equal, _attribute).0;
-      };
-      case (null) {
-        attributes := HashMap.insert(attributes, number, n32Hash, n32Equal, attribute).0;
-      };
-    };
-    "success";
-  };
 
   public shared ({ caller }) func startMint(duration : Nat) : async () {
     assert (caller == collectionOwner);
@@ -343,14 +287,25 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     value;
   };
 
-  public shared ({ caller }) func setMintPrice(value : Nat) : async () {
+  /*public shared ({ caller }) func setMintPrice(value : Nat) : async () {
     assert (caller == collectionOwner);
     assert (value >= 0);
     mintPrice := value;
+  };*/
+
+  private func _mintPrice(symbol:Text): Nat {
+    switch(symbol.size()){
+      case(2) 5000000;
+      case(3) 4000000;
+      case(4) 3000000;
+      case(5) 2000000;
+      case(_) 2000000;
+    }
   };
 
-  public shared ({ caller }) func mint(recipient : Principal) : async [Nat32] {
-    var mintIds:Buffer.Buffer<Nat32> = Buffer.fromArray([]);
+  public shared ({ caller }) func mint(symbol : Text, recipient : Principal) : async Nat32 {
+    assert(symbol.size() > 1);
+    let mintPrice = _mintPrice(symbol);
     let tempOffer : Offer = {
       offerId = 0;
       mintId = 0;
@@ -361,61 +316,24 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       icp = mintPrice;
       expiration = null;
     };
-    
+
     if (isMinting == true) {
       await _tokenTransferFrom(tempOffer);
-      for ((key, value) in HashMap.entries(images)) {
-        let currentId = mintId;
-        let _metadata : Metadata = {
-          mintId = currentId;
-          data = _createMetaData(description, external_url, name,key);
-        };
-
-        //generate NFT
-        _mint(_metadata, recipient);
-        manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-        mintIds.add(mintId);
-        mintId := mintId + 1;
+      let currentId = mintId;
+      let _metadata : Metadata = {
+        mintId = currentId;
+        data = Text.encodeUtf8(symbol);
       };
-      Buffer.toArray(mintIds)
+
+      //generate NFT
+      _mint(_metadata, recipient);
+      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+      mintId := mintId + 1;
+      currentId;
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
   };
-
-  /*public shared ({ caller }) func bulkMint(count : Nat32, recipient : Principal) : async [Nat32] {
-    let tempOffer : Offer = {
-      offerId = 0;
-      mintId = 0;
-      seller = Principal.fromActor(this);
-      buyer = recipient;
-      amount = mintPrice * Nat32.toNat(count);
-      token = ? #Dip20(Constants.WICP_Canister);
-      icp = mintPrice * Nat32.toNat(count);
-      expiration = null;
-    };
-    if (isMinting == false) {
-      await _tokenTransferFrom(tempOffer);
-      var result : [Nat32] = [];
-      for (j in Iter.range(0, Nat32.toNat(count))) {
-        let currentId = mintId;
-        mintId := mintId + 1;
-        let _metadata : Metadata = {
-          mintId = currentId;
-          data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
-        };
-        _mint(_metadata, recipient);
-        manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-        result := Array.append(result, [currentId]);
-      };
-      result;
-    } else if (isWhiteListMinting == false) {
-      await _tokenTransferFrom(tempOffer);
-      await _whiteListbulkMint(caller, count, recipient);
-    } else {
-      throw (Error.reject("UNAUTHORIZED"));
-    };
-  };*/
 
   public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
     assert (_isOwner(caller, _mintId));
@@ -583,7 +501,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       };
     } else if (path.size() == 3) {
       switch (path[0]) {
-        case ("layer") return _layerResponse(path[1], path[2]);
         case (_) return return Http.BAD_REQUEST();
       };
     } else {
@@ -772,36 +689,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       headers = [("Content-Type", "application/json")];
       body = blob;
       streaming_strategy = null;
-    };
-  };
-
-  private func _layerResponse(number : Text, index : Text) : Http.Response {
-    let _index = Utils.textToNat(index);
-    let _number = Utils.textToNat(number);
-    let exist = HashMap.get(attributes, Nat32.fromNat(_number), n32Hash, n32Equal);
-    switch (exist) {
-      case (?exist) {
-        switch (exist[_index].layer) {
-          case (?layer) {
-            if (exist.size() > _index) {
-              let response : Http.Response = {
-                status_code = 200;
-                headers = [("Content-Type", layer.contentType)];
-                body = layer.value;
-                streaming_strategy = null;
-              };
-            } else {
-              return Http.BAD_REQUEST();
-            };
-          };
-          case (null) {
-            return Http.NOT_FOUND();
-          };
-        };
-      };
-      case (null) {
-        return Http.BAD_REQUEST();
-      };
     };
   };
 
@@ -1464,170 +1351,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  private func _roll(entropy : Blob) : [Attribute] {
-    var results : Buffer.Buffer<Attribute> = Buffer.fromArray([]);
-    for ((key, _attributes) in HashMap.entries(attributes)) {
-      let result = _pickWeighted(entropy, _attributes);
-      results.add(result);
-    };
-    Buffer.toArray(results);
-  };
-
-  private func _pickWeighted(entropy : Blob, options : [Attribute]) : Attribute {
-    let finite = Random.Finite(entropy);
-    var weightSum : Nat32 = 0;
-    var vistedWeight : Nat32 = 0;
-    for (option in options.vals()) {
-      weightSum := weightSum + option.weight;
-    };
-    let randomFromZeroToNine : ?Nat = _nextNat(finite, Nat32.toNat(weightSum));
-    switch (randomFromZeroToNine) {
-      case (?r) {
-        for (option in options.vals()) {
-          vistedWeight := vistedWeight + option.weight;
-          if (Nat32.fromNat(r) <= vistedWeight) {
-            return option;
-          } else {
-            return options[0];
-          };
-        };
-      };
-      case (null) {
-        return options[0];
-      };
-    };
-    return options[0];
-  };
-
-  private func _randomImage(entropy : Blob) : async* (image : Blob, id : Nat32) {
-    let finite = Random.Finite(entropy);
-    let num : ?Nat = _nextNat(finite, images.size);
-    switch (num) {
-      case (?num) {
-        if (num == 0) {
-          let _num = Nat32.fromNat(1);
-          let exist = HashMap.get(images, _num, n32Hash, n32Equal);
-          switch (exist) {
-            case (?exist)(exist, _num);
-            case (null) throw (Error.reject("Image Not Found"));
-          };
-        } else {
-          let _num = Nat32.fromNat(num);
-          let exist = HashMap.get(images, _num, n32Hash, n32Equal);
-          switch (exist) {
-            case (?exist)(exist, _num);
-            case (null) throw (Error.reject("Image Not Found"));
-          };
-        };
-      };
-      case (null) {
-        let _num = Nat32.fromNat(1);
-        let exist = HashMap.get(images, _num, n32Hash, n32Equal);
-        switch (exist) {
-          case (?exist)(exist, _num);
-          case (null) throw (Error.reject("Image Not Found"));
-        };
-      };
-    };
-  };
-
-  private func _createMetaData(description : Text, external_url : Text, name : Text, image : Nat32) : Blob {
-    //let _attributes = _roll(entropy);
-    let _currentImageId = Nat32.toText(image);
-    let canisterId = Principal.toText(Principal.fromActor(this));
-    let imageUrl = "https://" #canisterId # ".raw.ic0.app/image/" #_currentImageId;
-    let metaData = Utils.createMetaData(description, external_url, imageUrl, name, []);
-    let json = JSON.show(metaData);
-    Text.encodeUtf8(json);
-  };
-
-  private func _composeImage(_attributes : [Attribute]) : async Blob {
-    let _layers : Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
-    for (attribute in _attributes.vals()) {
-      switch (attribute.layer) {
-        case (?layer) {
-          _layers.add(Blob.toArray(layer.value));
-        };
-        case (null) {
-
-        };
-      };
-    };
-    let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers), canvasWidth, canvasHeight);
-    Blob.fromArray(bytes);
-  };
-
-  private func composeImage() : async Blob {
-    let number : Nat32 = 0;
-    let number1 : Nat32 = 1;
-    let number2 : Nat32 = 2;
-    let exist = HashMap.get(attributes, number, n32Hash, n32Equal);
-    let exist2 = HashMap.get(attributes, number1, n32Hash, n32Equal);
-    let exist3 = HashMap.get(attributes, number2, n32Hash, n32Equal);
-    let _layers : Buffer.Buffer<[Nat8]> = Buffer.fromArray([]);
-    switch (exist) {
-      case (?exist) {
-        switch (exist[0].layer) {
-          case (?layer) {
-            _layers.add(Blob.toArray(layer.value));
-          };
-          case (null) {
-
-          };
-        };
-      };
-      case (null) {
-
-      };
-    };
-    switch (exist2) {
-      case (?exist2) {
-        switch (exist2[0].layer) {
-          case (?layer) {
-            _layers.add(Blob.toArray(layer.value));
-          };
-          case (null) {
-
-          };
-        };
-      };
-      case (null) {
-
-      };
-    };
-    /*switch (exist3) {
-      case (?exist3) {
-        switch (exist3[0].layer) {
-          case (?layer) {
-            _layers.add(Blob.toArray(layer.value));
-          };
-          case (null) {
-
-          };
-        };
-      };
-      case (null) {
-
-      };
-    };*/
-    let bytes = await Minter.service(minterCanisterId).compose(Buffer.toArray(_layers), canvasWidth, canvasHeight);
-    Blob.fromArray(bytes);
-  };
-
-  private func _randomRange(start : Nat32, end : Nat32) : async ?Nat32 {
-    let numbers = Blob.toArray(await Random.blob());
-    var result : ?Nat32 = null;
-    for (number in numbers.vals()) {
-      let _number = Nat32.fromNat(Nat8.toNat(number));
-      if (_number >= start and _number <= end) {
-        result := ?_number;
-      } else {
-        result := await _randomRange(start, end);
-      };
-    };
-    result;
-  };
-
   // Returns the cycles received up to the capacity allowed
   public func wallet_receive() : async { accepted : Nat64 } {
     let amount = Cycles.available();
@@ -1637,24 +1360,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     assert (deposit == accepted);
     cyclesBalance += accepted;
     { accepted = Nat64.fromNat(accepted) };
-  };
-
-  private func _nextNat(finite : Random.Finite, max : Nat) : ?Nat {
-    // Find out the 2 pow that fits [max]
-    let sqrt = Float.sqrt(Float.fromInt(max + 1));
-    let exponent = Float.toInt(Float.ceil(sqrt));
-
-    // Get a random number inside that range
-    let optionRandom = finite.range(Nat8.fromIntWrap(exponent));
-    if (optionRandom == null) {
-      // Entropy finished
-      return null;
-    };
-    let randomNumber = Option.get(optionRandom, 0);
-
-    // Found random number inside [0-max] range
-    var maxRandomNumber = Int.abs(Float.toInt(Float.pow(2, Float.fromInt(exponent))));
-    ?((randomNumber * (max + 1)) / maxRandomNumber);
   };
 
 };
