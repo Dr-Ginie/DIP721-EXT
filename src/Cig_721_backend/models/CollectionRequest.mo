@@ -8,7 +8,5 @@ module {
         description : Text; 
         bannerImage : Blob; 
         profileImage : Blob;
-        canvasWidth:Nat32;
-        canvasHeight:Nat32;
     }
 }
