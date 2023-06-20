@@ -56,12 +56,7 @@ let packages = [
   , repo = "https://github.com/aviate-labs/stable.mo"
   , version = "v0.1.1"
   , dependencies = [ "base-0.7.3" ]
-  },
-  { name = "explore"
-  , repo = "https://github.com/CigDao/explore-motoko"
-  , version = "v0.0.2"
-  , dependencies = [ "base", "crypto", "json" ]
-  },
+  }
 ]
 
 in  upstream # aviate-labs # packages

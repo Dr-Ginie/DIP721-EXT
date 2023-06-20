@@ -1,11 +1,7 @@
 {
   "canisters": {
-    "Cig_721_backend": {
-      "main": "src/Cig_721_backend/main.mo",
-      "type": "motoko"
-    },
-    "nft_registry_backend": {
-      "main": "src/nft_registry_backend/main.mo",
+    "Dip_721_backend": {
+      "main": "src/Dip_721_backend/main.mo",
       "type": "motoko"
     }
   },

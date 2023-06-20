@@ -1,6 +1,6 @@
 
 **deploy commands**
-DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy --network ic Cig_721_backend --argument '(record {
+DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy --network ic Dip_721_backend --argument '(record {
         collectionCreator = "i47jd-kewyq-vcner-l4xf7-edf77-aw4xp-u2kpb-2qai2-6ie7k-tcngl-oqe";
         external_url = "https://www.youtube.com/";
         royalty = 2.0;
@@ -13,7 +13,7 @@ DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy --network ic Cig_721_backend --argum
 })'
 
 **reisntall commands**
-DFX_MOC_PATH="$(vessel bin)/moc" dfx canister --network ic install Cig_721_backend --argument '(record {
+DFX_MOC_PATH="$(vessel bin)/moc" dfx canister --network ic install Dip_721_backend --argument '(record {
         collectionCreator = "i47jd-kewyq-vcner-l4xf7-edf77-aw4xp-u2kpb-2qai2-6ie7k-tcngl-oqe";
         external_url = "https://www.youtube.com/";
         royalty = 2.0;
@@ -27,7 +27,7 @@ DFX_MOC_PATH="$(vessel bin)/moc" dfx canister --network ic install Cig_721_backe
 
 DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy nft_registry_backend --argument '(principal "i47jd-kewyq-vcner-l4xf7-edf77-aw4xp-u2kpb-2qai2-6ie7k-tcngl-oqe")'
 DFX_MOC_PATH="$(vessel bin)/moc" dfx generate
-DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Cig_721_frontend
+DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Dip_721_frontend
 
 
 **distribute cycles**

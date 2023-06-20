@@ -24,9 +24,8 @@ import Nat8 "mo:base/Nat8";
 import Nat "mo:base/Nat";
 import Time "mo:base/Time";
 import Dip20 "./services/Dip20";
-import Cig20 "./services/Cig20";
+import Dip20_EXT "./services/Dip20_EXT";
 import ICRC2 "./services/ICRC2";
-import Minter "./services/Minter";
 import Nat64 "mo:base/Nat64";
 import Utils "common/Utils";
 import Token "./models/Token";
@@ -40,8 +39,9 @@ import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 import Random "mo:base/Random";
 import Option "mo:base/Option";
 import Int "mo:base/Int";
+import Transaction "./models/Transaction"
 
-actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = this {
+actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = this {
 
   private type Metadata = Metadata.Metadata;
   private type Offer = Offer.Offer;
@@ -53,6 +53,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private type AuctionRequest = Auction.AuctionRequest;
   private type JSON = JSON.JSON;
   private type WhiteList = WhiteList.WhiteList;
+  private type Transaction = Transaction.Transaction;
 
   let pHash = Principal.hash;
   let pEqual = Principal.equal;
@@ -77,12 +78,12 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable let profile = collectionRequest.profileImage;
   private stable var isMinting = false;
   private stable var isWhiteListMinting = false;
-  private var minterCanisterId = "xsclo-2qaaa-aaaan-qdkvq-cai";
 
   private var capacity = 1000000000000000000;
   private var cyclesBalance = Cycles.balance();
 
   private stable var mintId : Nat32 = 1;
+  private stable var transactionId : Nat32 = 1;
   private stable var offerId : Nat32 = 1;
   private stable var imageId : Nat32 = 1;
   private stable var holders = HashMap.empty<Principal, HashMap.HashMap<Nat32, Metadata>>();
@@ -91,6 +92,7 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   private stable var metaData = HashMap.empty<Nat32, Metadata>();
   private stable var offers = HashMap.empty<Nat32, [Offer]>();
   private stable var sales = HashMap.empty<Nat32, OfferRequest>();
+  private stable var ledger = HashMap.empty<Nat32, Transaction>();
   private stable var approved = HashMap.empty<Nat32, Principal>();
   private stable var auctions = HashMap.empty<Nat32, Auction>();
   private stable var bids = HashMap.empty<Nat32, HashMap.HashMap<Principal, Offer>>();
@@ -113,10 +115,6 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
 
   public query func getCycles() : async Nat {
     Cycles.balance();
-  };
-
-  public query func getMintCount() : async Nat32 {
-    mintId;
   };
 
   public query func getName() : async Text {
@@ -156,6 +154,14 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
         throw (Error.reject("Not Found"));
       };
     };
+  };
+
+  public query func fetchTransactions() : async [Transaction] {
+    var _transactions = Buffer.Buffer<Transaction>(0);
+    for ((id, _transaction) in HashMap.entries(ledger)) {
+      _transactions.add(_transaction);
+    };
+    Buffer.toArray(_transactions);
   };
 
   public query func fetchOffers(_mintId : Nat32) : async [Offer] {
@@ -272,7 +278,47 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     count;
   };
 
+  public query func fetchHolders() : async [Principal] {
+    let _holders : Buffer.Buffer<Principal> = Buffer.fromArray([]);
+    for ((key, value) in HashMap.entries(holders)) {
+      _holders.add(key);
+    };
+    Buffer.toArray(_holders);
+  };
+
+  public query func getMintCount() : async Nat32 {
+    mintId;
+  };
+
+  public query func getTransactionCount() : async Nat32 {
+    transactionId;
+  };
+
+  public query func getOfferCount() : async Nat32 {
+    Nat32.fromNat(offers.size);
+  };
+
+  public query func getActiveSaleCount() : async Nat32 {
+    Nat32.fromNat(sales.size);
+  };
+
+  public query func getActiveBidCount() : async Nat32 {
+    Nat32.fromNat(bids.size);
+  };
+
+  public query func getSaleHistroyCount() : async Nat32 {
+    Nat32.fromNat(priceHistory.size);
+  };
+
   //////////Update Methods///////////
+
+  public shared ({ caller }) func putBlob(blob : Blob) : async Nat32 {
+    assert (caller == collectionOwner);
+    let currentId = imageId;
+    imageId := imageId;
+    images := HashMap.insert(images, currentId, n32Hash, n32Equal, blob).0;
+    currentId;
+  };
 
   public shared ({ caller }) func startMint(duration : Nat) : async () {
     assert (caller == collectionOwner);
@@ -283,46 +329,18 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   public shared ({ caller }) func addWhiteList(value : WhiteList) : async WhiteList {
+    assert (caller == collectionOwner);
     whiteList := Array.append(whiteList, [value]);
     value;
   };
 
-  /*public shared ({ caller }) func setMintPrice(value : Nat) : async () {
+  public shared ({ caller }) func mint(blob : Blob, recipient : Principal) : async Nat32 {
     assert (caller == collectionOwner);
-    assert (value >= 0);
-    mintPrice := value;
-  };*/
-
-  private func _mintPrice(symbol:Text): Nat {
-    switch(symbol.size()){
-      case(2) 5000000;
-      case(3) 4000000;
-      case(4) 3000000;
-      case(5) 2000000;
-      case(_) 2000000;
-    }
-  };
-
-  public shared ({ caller }) func mint(symbol : Text, recipient : Principal) : async Nat32 {
-    assert(symbol.size() > 1);
-    let mintPrice = _mintPrice(symbol);
-    let tempOffer : Offer = {
-      offerId = 0;
-      mintId = 0;
-      seller = Principal.fromActor(this);
-      buyer = recipient;
-      amount = mintPrice;
-      token = ? #Dip20(Constants.WICP_Canister);
-      icp = mintPrice;
-      expiration = null;
-    };
-
     if (isMinting == true) {
-      await _tokenTransferFrom(tempOffer);
       let currentId = mintId;
       let _metadata : Metadata = {
         mintId = currentId;
-        data = Text.encodeUtf8(symbol);
+        data = blob;
       };
 
       //generate NFT
@@ -330,9 +348,37 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
       manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
       mintId := mintId + 1;
       currentId;
+    } else if (isWhiteListMinting == true) {
+      _whiteListMint(caller, recipient, blob);
     } else {
       throw (Error.reject("UNAUTHORIZED"));
     };
+  };
+
+  public shared ({ caller }) func bulkMint(blobs : [Blob], recipient : Principal) : async [Nat32] {
+    assert (caller == collectionOwner);
+    var result : [Nat32] = [];
+    if (isMinting == true) {
+      for (blob in blobs.vals()) {
+        let currentId = mintId;
+        mintId := mintId + 1;
+        let _metadata : Metadata = {
+          mintId = currentId;
+          data = blob;
+        };
+        _mint(_metadata, recipient);
+        manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
+        result := Array.append(result, [currentId]);
+      };
+    } else if (isWhiteListMinting == true) {
+      for (blob in blobs.vals()) {
+        let currentId = _whiteListMint(caller, recipient, blob);
+        result := Array.append(result, [currentId]);
+      };
+    } else {
+      throw (Error.reject("UNAUTHORIZED"));
+    };
+    result;
   };
 
   public shared ({ caller }) func transfer(to : Principal, _mintId : Nat32) : async () {
@@ -610,35 +656,18 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  /*private func _whiteListMint(caller : Principal, recipient : Principal) : async Nat32 {
+  private func _whiteListMint(caller : Principal, recipient : Principal, blob : Blob) : Nat32 {
     assert (_isWhiteList(caller));
     let currentId = mintId;
     mintId := mintId + 1;
     let _metadata : Metadata = {
       mintId = currentId;
-      data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
+      data = blob;
     };
     _mint(_metadata, recipient);
     manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
     currentId;
-  };*/
-
-  /*private func _whiteListbulkMint(caller : Principal, count : Nat32, recipient : Principal) : async [Nat32] {
-    assert (_isWhiteList(caller));
-    var result : [Nat32] = [];
-    for (j in Iter.range(0, Nat32.toNat(count))) {
-      let currentId = mintId;
-      mintId := mintId + 1;
-      let _metadata : Metadata = {
-        mintId = currentId;
-        data = await _createMetaData(Principal.toBlob(caller), description, external_url, name);
-      };
-      _mint(_metadata, recipient);
-      manifest := HashMap.insert(manifest, currentId, n32Hash, n32Equal, caller).0;
-      result := Array.append(result, [currentId]);
-    };
-    result;
-  };*/
+  };
 
   private func _startWhiteListMinting(duration : Nat) : async () {
     var _whiteList = List.fromArray(whiteList);
@@ -948,6 +977,15 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
     await _remove(_mintId);
     manifest := HashMap.insert(manifest, _mintId, n32Hash, n32Equal, to).0;
+    let currentId = transactionId;
+    transactionId := transactionId + 1;
+    let transaction = {
+      from = from;
+      to = to;
+      mintId = _mintId;
+      createdAt = Time.now();
+    };
+    ledger := HashMap.insert(ledger, transactionId, n32Hash, n32Equal, transaction).0;
 
   };
 
@@ -1015,8 +1053,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     switch (offer.token) {
       case (?token) {
         switch (token) {
-          case (#Cig20(value)) {
-            await Cig20.service(value).allowance(offer.buyer, Principal.fromActor(this));
+          case (#Dip20_EXT(value)) {
+            await Dip20_EXT.service(value).allowance(offer.buyer, Principal.fromActor(this));
           };
           case (#Dip20(value)) {
             await Dip20.service(value).allowance(offer.buyer, Principal.fromActor(this));
@@ -1083,10 +1121,10 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     switch (offer.token) {
       case (?token) {
         switch (token) {
-          case (#Cig20(value)) {
+          case (#Dip20_EXT(value)) {
             let _amount = offer.amount - Utils.floatToNat(royalties);
-            let result = await Cig20.service(value).transfer(to, _amount);
-            let royaltyResult = await Cig20.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
+            let result = await Dip20_EXT.service(value).transfer(to, _amount);
+            let royaltyResult = await Dip20_EXT.service(value).transfer(collectionCreator, Utils.floatToNat(royalties));
             switch (result) {
               case (#Ok(value)) {
 
@@ -1176,8 +1214,8 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     switch (offer.token) {
       case (?token) {
         switch (token) {
-          case (#Cig20(value)) {
-            let result = await Cig20.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
+          case (#Dip20_EXT(value)) {
+            let result = await Dip20_EXT.service(value).transferFrom(offer.buyer, Principal.fromActor(this), offer.amount);
             switch (result) {
               case (#Ok(value)) {
 
@@ -1250,10 +1288,10 @@ actor class Cig721(collectionRequest : CollectionRequest.CollectionRequest) = th
     switch (offer.token) {
       case (?token) {
         switch (token) {
-          case (#Cig20(value)) {
+          case (#Dip20_EXT(value)) {
             let _amount = offer.amount - Utils.floatToNat(royalties);
-            let result = await Cig20.service(value).transferFrom(offer.buyer, offer.seller, _amount);
-            let royaltyResult = await Cig20.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
+            let result = await Dip20_EXT.service(value).transferFrom(offer.buyer, offer.seller, _amount);
+            let royaltyResult = await Dip20_EXT.service(value).transferFrom(offer.buyer, collectionCreator, Utils.floatToNat(royalties));
             switch (result) {
               case (#Ok(value)) {
 
