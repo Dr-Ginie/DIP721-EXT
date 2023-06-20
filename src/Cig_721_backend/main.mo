@@ -39,7 +39,8 @@ import { recurringTimer; cancelTimer; setTimer } = "mo:base/Timer";
 import Random "mo:base/Random";
 import Option "mo:base/Option";
 import Int "mo:base/Int";
-import Transaction "./models/Transaction"
+import Transaction "./models/Transaction";
+import Order "mo:base/Order";
 
 actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = this {
 
@@ -154,12 +155,22 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
     };
   };
 
-  public query func fetchTransactions() : async [Transaction] {
-    var _transactions = Buffer.Buffer<Transaction>(0);
-    for ((id, _transaction) in HashMap.entries(ledger)) {
-      _transactions.add(_transaction);
+  public query func fetchTransactions(start : Nat, limit : Nat) : async [(Nat32, Transaction)] {
+    let temp = Iter.toArray(HashMap.entries(ledger));
+    func order(a : (Nat32, Transaction), b : (Nat32, Transaction)) : Order.Order {
+      return Nat32.compare(b.1.mintId, a.1.mintId);
     };
-    Buffer.toArray(_transactions);
+    let sorted = Array.sort(temp, order);
+    let limit_ : Nat = if (start + limit > temp.size()) {
+      temp.size() - start;
+    } else {
+      limit;
+    };
+    var res:[(Nat32, Transaction)] = [];
+    for (i in Iter.range(0, limit_ - 1)) {
+      res := Array.append(res,[sorted[i + start]]);
+    };
+    return res;
   };
 
   public query func fetchOffers(_mintId : Nat32) : async [Offer] {
