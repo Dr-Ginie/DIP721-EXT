@@ -242,8 +242,16 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
     Buffer.toArray(result);
   };
 
-  public query func fetchPriceHistory(_mintId : Nat32) : async [Price] {
-    _fetchPriceHistory(_mintId);
+  public query func fetchPriceHistory(since:?Time.Time, _mintId : Nat32) : async [Price] {
+   let _prices = _fetchPriceHistory(_mintId);
+   switch(since){
+    case(?since){
+      Array.filter(_prices,func(e:Price):Bool{e.timeStamp > since})
+    };
+    case(null){
+      _prices
+    };
+   };
   };
 
   public query func getData(_mintId : Nat32) : async Metadata {
