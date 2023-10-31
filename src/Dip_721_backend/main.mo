@@ -166,9 +166,9 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
     } else {
       limit;
     };
-    var res:[(Nat32, Transaction)] = [];
+    var res : [(Nat32, Transaction)] = [];
     for (i in Iter.range(0, limit_ - 1)) {
-      res := Array.append(res,[sorted[i + start]]);
+      res := Array.append(res, [sorted[i + start]]);
     };
     return res;
   };
@@ -242,16 +242,32 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
     Buffer.toArray(result);
   };
 
-  public query func fetchPriceHistory(since:?Time.Time, _mintId : Nat32) : async [Price] {
-   let _prices = _fetchPriceHistory(_mintId);
-   switch(since){
-    case(?since){
-      Array.filter(_prices,func(e:Price):Bool{e.timeStamp > since})
+  public query func balance_of(owner : Principal) : async [Nat32] {
+    let exist = HashMap.get(holders, owner, pHash, pEqual);
+    var result = Buffer.Buffer<Nat32>(0);
+    switch (exist) {
+      case (?exist) {
+        for ((id, data) in HashMap.entries(exist)) {
+          result.add(id);
+        };
+      };
+      case (null) {
+        throw (Error.reject("No Data for Principal " #Principal.toText(owner)));
+      };
     };
-    case(null){
-      _prices
+    Buffer.toArray(result);
+  };
+
+  public query func fetchPriceHistory(since : ?Time.Time, _mintId : Nat32) : async [Price] {
+    let _prices = _fetchPriceHistory(_mintId);
+    switch (since) {
+      case (?since) {
+        Array.filter(_prices, func(e : Price) : Bool { e.timeStamp > since });
+      };
+      case (null) {
+        _prices;
+      };
     };
-   };
   };
 
   public query func getData(_mintId : Nat32) : async Metadata {
@@ -739,13 +755,13 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
   };
 
   private func _imageResponse(value : Text) : Http.Response {
-    let exist = HashMap.get(images, Utils.textToNat32(value), n32Hash, n32Equal);
+    let exist = HashMap.get(metaData, Utils.textToNat32(value), n32Hash, n32Equal);
     switch (exist) {
       case (?exist) {
         let response : Http.Response = {
           status_code = 200;
           headers = [("Content-Type", "image/png")];
-          body = exist;
+          body = exist.data;
           streaming_strategy = null;
         };
       };
@@ -955,7 +971,6 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
     let from = _getOwner(_mintId);
     let exist = HashMap.get(holders, from, pHash, pEqual);
     let exist2 = HashMap.get(holders, to, pHash, pEqual);
-
     switch (exist) {
       case (?exist) {
         switch (exist2) {
@@ -1003,7 +1018,6 @@ actor class Dip721(collectionRequest : CollectionRequest.CollectionRequest) = th
       createdAt = Time.now();
     };
     ledger := HashMap.insert(ledger, transactionId, n32Hash, n32Equal, transaction).0;
-
   };
 
   private func _remove(_mintId : Nat32) : async () {
