@@ -1,12 +1,10 @@
-import test from "ava";
-
-import {aliceActor, bobActor, deployerActor, johnActor} from "../setup";
+import { aliceActor, bobActor, deployerActor, johnActor } from "../setup";
 
 const normalActors = [aliceActor, bobActor, johnActor];
 const allActors = [...normalActors, deployerActor];
 
-test("Cover metadata.", async t => {
-  // console.log("test 1");
+it("Cover metadata.", async () => {
+  console.log("testing");
   // (await Promise.all(allActors.map(actor => actor.git_commit_hash()))).forEach(result =>
   //   t.true(typeof result === "string" && result !== "")
   // );

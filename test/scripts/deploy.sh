@@ -23,7 +23,7 @@ HOME=$ROOT_HOME DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy Dip_721_backend --ar
 
 cd ..
 npm run test
-node dist/integrations/mint.js
+# node dist/integrations/mint.js
 
 
 

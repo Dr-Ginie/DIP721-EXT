@@ -1,6 +1,4 @@
-import test, {Assertions} from "ava";
-
-import {aliceActor, bobActor, deployerActor, johnActor} from "../setup";
+import { aliceActor, bobActor, deployerActor, johnActor } from "../setup";
 
 const normalActors = [aliceActor, bobActor, johnActor];
 const allActors = [...normalActors, deployerActor];
