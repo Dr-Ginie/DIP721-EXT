@@ -11,3 +11,7 @@ DFX_MOC_PATH="$(vessel bin)/moc" dfx deploy --network ic Dip_721_backend --argum
         canvasWidth = 490;
         canvasHeight = 490;
 })'
+
+
+
+# node factory/
