@@ -30,20 +30,20 @@ const agent = (identity: Ed25519KeyIdentity) => {
   return agent;
 };
 
-// const createActor = async (identity: Identity): Promise<Service> => {
-const createActor = (identity: Identity): Service => {
-  // const agent = new HttpAgent({ host, fetch, identity });
+const createActor = async (identity: Identity): Promise<Service> => {
+// const createActor = (identity: Identity): Service => {
+  const agent = new HttpAgent({ host, fetch, identity });
   const actor = Actor.createActor<Service>(idlFactory, {
     canisterId: nftCanisterId,
-    // agent,
+    agent,
   });
   // Fetch root key for certificate validation during development
-  // await agent.fetchRootKey().catch((err) => {
-  //   console.error(
-  //     "Unable to fetch root key. Check to ensure that your local replica is running"
-  //   );
-  //   throw err;
-  // });
+  await agent.fetchRootKey().catch((err) => {
+    console.error(
+      "Unable to fetch root key. Check to ensure that your local replica is running"
+    );
+    throw err;
+  });
   return actor;
 };
 

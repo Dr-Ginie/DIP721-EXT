@@ -18,7 +18,6 @@
   "engines": {
     "node": ">=14.18.2"
   },
-  "type": "module",
   "author": "https://x.com/the_registry_",
   "license": "ISC",
   "devDependencies": {
